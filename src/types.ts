@@ -143,11 +143,11 @@ export interface JavaScriptMetrics {
 export interface RuntimeRun {
   readonly index: number;
   readonly cwv: {
-    readonly lcp: number;
+    readonly lcp: number | null;
     readonly inp: number | null;
     readonly cls: number;
-    readonly fcp: number;
-    readonly ttfb: number;
+    readonly fcp: number | null;
+    readonly ttfb: number | null;
   };
   readonly resources: {
     readonly totalTransfer: number;

@@ -5,6 +5,7 @@
 
 import { parse } from './parser.ts';
 import { getHelp, getVersion } from './help.ts';
+import { executeBench } from './commands/bench.ts';
 import { match } from '../result.ts';
 import type { Command } from '../types.ts';
 
@@ -19,15 +20,7 @@ const runCommand = async (command: Command): Promise<number> => {
       return 0;
 
     case 'bench':
-      console.log(`Benchmarking ${command.url}...`);
-      console.log(`  Runs: ${command.runs}`);
-      console.log(`  Device: ${command.device}`);
-      console.log(`  Network: ${command.network ?? 'none'}`);
-      console.log(`  Output: ${command.output ?? 'stdout'}`);
-      console.log(`  Format: ${command.format}`);
-      // TODO: Implement actual benchmarking
-      console.log('\nBench command not yet implemented.');
-      return 1;
+      return executeBench(command);
 
     case 'journey':
       console.log(`Running journey: ${command.journeyFile}`);
