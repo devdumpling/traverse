@@ -66,9 +66,9 @@ describe('default config', () => {
   });
 
   test('includes all device presets', () => {
-    expect(DEFAULT_CONFIG.devices.desktop).toBeDefined();
-    expect(DEFAULT_CONFIG.devices.mobile).toBeDefined();
-    expect(DEFAULT_CONFIG.devices.tablet).toBeDefined();
+    expect(DEFAULT_CONFIG.devices['desktop']).toBeDefined();
+    expect(DEFAULT_CONFIG.devices['mobile']).toBeDefined();
+    expect(DEFAULT_CONFIG.devices['tablet']).toBeDefined();
   });
 
   test('includes all network presets', () => {

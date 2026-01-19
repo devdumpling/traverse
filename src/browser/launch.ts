@@ -10,6 +10,7 @@ export interface LaunchOptions {
   readonly headless?: boolean;
   readonly device: DeviceConfig;
   readonly network?: NetworkConfig;
+  readonly baseURL?: string;
 }
 
 export const launchBrowser = async (): Promise<Result<Browser, BrowserError>> => {
@@ -41,6 +42,10 @@ export const createContext = async (
     
     if (options.device.userAgent) {
       contextOptions.userAgent = options.device.userAgent;
+    }
+    
+    if (options.baseURL) {
+      contextOptions.baseURL = options.baseURL;
     }
 
     const context = await browser.newContext(contextOptions);
