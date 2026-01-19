@@ -125,3 +125,12 @@ Use Bun APIs:
 - `traverse-spec.md` — Full project specification
 - `src/types.ts` — Core type definitions (start here)
 - `src/cli.ts` — CLI entry point
+
+### Workflow
+
+This project uses `jj` as the VCS frontend with `git` as the "backend". Break changes down into nice changes by using `jj new -m "describe your changes"` and `jj describe -m "describing a change"`. Work in logical steps and make sure to use `jj` to break down incremental work. Never push without asking.
+
+### Dependencies
+
+For any dependencies, make sure to search the web to see what the latest version is. It is 2026, and this being a new project means we should be using the latest versions and patterns. Prefer modern, readable code and do not add dependencies without asking. Dependencies should only make sense to solve problems, not bloat. 
+
