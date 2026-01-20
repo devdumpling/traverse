@@ -85,6 +85,77 @@ export type ResourceCacheStatus = 'memory' | 'disk' | 'service-worker' | 'networ
 export type ResourceType = 'script' | 'stylesheet' | 'image' | 'font' | 'fetch' | 'document' | 'other';
 
 // =============================================================================
+// Static Analysis Types
+// =============================================================================
+
+export type FrameworkType = 'nextjs' | 'react-router' | 'sveltekit' | 'generic-spa' | 'unknown';
+
+export type RouterType = 'app' | 'pages' | 'hybrid' | 'unknown';
+
+export interface StaticAnalysisMeta {
+  readonly analyzedAt: string;
+  readonly framework: FrameworkType;
+  readonly frameworkVersion: string | null;
+  readonly sourceDir: string;
+  readonly buildDir: string | null;
+}
+
+export interface EntryAnalysis {
+  readonly name: string;
+  readonly route: string | null;
+  readonly size: ByteSize;
+  readonly chunks: readonly string[];
+}
+
+export interface ChunkAnalysis {
+  readonly id: string;
+  readonly path: string;
+  readonly size: ByteSize;
+  readonly shared: boolean;
+  readonly loadedBy: readonly string[];
+}
+
+export interface RouteAnalysis {
+  readonly path: string;
+  readonly type: 'static' | 'dynamic' | 'catch-all';
+  readonly segments: readonly string[];
+  readonly chunks: readonly string[];
+}
+
+export interface DuplicateDependency {
+  readonly name: string;
+  readonly versions: readonly string[];
+  readonly locations: readonly string[];
+}
+
+export interface NextJsAnalysis {
+  readonly routerType: RouterType;
+  readonly routes: readonly {
+    readonly path: string;
+    readonly type: 'static' | 'dynamic';
+    readonly segments: readonly string[];
+  }[];
+  readonly hasMiddleware: boolean;
+  readonly turbopack: boolean;
+}
+
+export interface BundleAnalysis {
+  readonly total: ByteSize;
+  readonly javascript: ByteSize;
+  readonly css: ByteSize;
+  readonly entries: readonly EntryAnalysis[];
+  readonly chunks: readonly ChunkAnalysis[];
+  readonly duplicates: readonly DuplicateDependency[];
+}
+
+export interface StaticAnalysis {
+  readonly meta: StaticAnalysisMeta;
+  readonly bundles: BundleAnalysis;
+  readonly routes: readonly RouteAnalysis[];
+  readonly frameworkSpecific: NextJsAnalysis | null;
+}
+
+// =============================================================================
 // Capture State
 // =============================================================================
 

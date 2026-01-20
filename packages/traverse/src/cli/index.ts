@@ -8,6 +8,7 @@ import { getHelp, getVersion } from './help.ts';
 import { executeBench } from './commands/bench.ts';
 import { executeJourney } from './commands/journey.ts';
 import { executeValidate } from './commands/validate.ts';
+import { executeAnalyze } from './commands/analyze.ts';
 import { match } from '../result.ts';
 import type { Command } from '../types.ts';
 
@@ -31,10 +32,7 @@ const runCommand = async (command: Command): Promise<number> => {
       return executeValidate(command);
 
     case 'analyze':
-      console.log(`Analyzing: ${command.sourceDir}`);
-      console.log(`  Build dir: ${command.buildDir ?? 'auto-detect'}`);
-      console.log('\nAnalyze command not yet implemented.');
-      return 1;
+      return executeAnalyze(command);
 
     case 'compare':
       console.log(`Comparing:`);

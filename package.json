@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": ["packages/*", "packages/examples/apps/*"],
   "scripts": {
-    "traverse": "bun run --cwd packages/traverse src/cli/index.ts",
+    "traverse": "bun run packages/traverse/src/cli/index.ts",
     "test": "bun test --cwd packages/traverse",
     "typecheck": "bun run --cwd packages/traverse typecheck",
     "build:next": "bun run --cwd packages/examples/apps/basic-next-app build",
