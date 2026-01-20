@@ -144,45 +144,45 @@ traverse/
 **Goal:** `traverse bench <url>` captures CWV + resources across N runs, outputs JSON.
 
 #### 1.1 Project Scaffolding
-- [ ] `package.json` with Bun + Playwright deps
-- [ ] `tsconfig.json` with strict settings
-- [ ] Directory structure creation
+- [x] `package.json` with Bun + Playwright deps
+- [x] `tsconfig.json` with strict settings
+- [x] Directory structure creation
 
 #### 1.2 Core Types (`src/types.ts`)
-- [ ] `Result<T, E>` type and utilities
-- [ ] `ByteSize` (raw, gzip, brotli)
-- [ ] `AggregatedMetric` (median, p75, p95, etc.)
-- [ ] `DeviceConfig`, `NetworkConfig`
-- [ ] `RuntimeBenchmark` interface
-- [ ] `CaptureState` discriminated union
+- [x] `Result<T, E>` type and utilities
+- [x] `ByteSize` (raw, gzip, brotli)
+- [x] `AggregatedMetric` (median, p75, p95, etc.)
+- [x] `DeviceConfig`, `NetworkConfig`
+- [x] `RuntimeBenchmark` interface
+- [x] `CaptureState` discriminated union
 
 #### 1.3 CLI Framework (`src/cli/`)
-- [ ] Argument parser with `Bun.argv`
-- [ ] Command routing
-- [ ] Help text generation
-- [ ] `traverse bench` command skeleton
+- [x] Argument parser with `Bun.argv`
+- [x] Command routing
+- [x] Help text generation
+- [x] `traverse bench` command skeleton
 
 #### 1.4 Config System (`src/config/`)
-- [ ] `defineConfig` helper
-- [ ] Config file loader
-- [ ] Default device presets (desktop, mobile)
-- [ ] Default network presets (4g, 3g)
+- [x] `defineConfig` helper
+- [x] Config file loader
+- [x] Default device presets (desktop, mobile)
+- [x] Default network presets (4g, 3g)
 
 #### 1.5 Browser Integration (`src/browser/`)
-- [ ] Playwright browser launch with options
-- [ ] Page context creation with device emulation
-- [ ] CDP session establishment
-- [ ] Network throttling setup
+- [x] Playwright browser launch with options
+- [x] Page context creation with device emulation
+- [x] CDP session establishment
+- [x] Network throttling setup
 
 #### 1.6 Metric Capture (`src/capture/`)
-- [ ] Core Web Vitals via CDP (LCP, FCP, CLS, TTFB)
-- [ ] Resource timing capture
-- [ ] Basic performance timeline
+- [x] Core Web Vitals via CDP (LCP, FCP, CLS, TTFB)
+- [x] Resource timing capture
+- [x] Basic performance timeline
 
 #### 1.7 Benchmark Runner (`src/bench/`)
-- [ ] Multi-run execution
-- [ ] Statistical aggregation (median, percentiles)
-- [ ] JSON output formatting
+- [x] Multi-run execution
+- [x] Statistical aggregation (median, percentiles)
+- [x] JSON output formatting
 
 **Deliverable:** Working `traverse bench <url> --runs 5 --output results.json`
 
@@ -193,25 +193,25 @@ traverse/
 **Goal:** `traverse journey <file>` executes multi-step journeys with per-step metrics.
 
 #### 2.1 Journey Definition (`src/journey/`)
-- [ ] `defineJourney` API
-- [ ] Journey file loading and validation
-- [ ] `traverse validate` command
+- [x] `defineJourney` API
+- [x] Journey file loading and validation
+- [x] `traverse validate` command
 
 #### 2.2 Journey Runner
-- [ ] Step execution with context
-- [ ] `CaptureContext` implementation (cwv, resources, navigation, memory)
-- [ ] Interaction bracketing (startInteraction/endInteraction)
+- [x] Step execution with context
+- [x] `CaptureContext` implementation (cwv, resources, navigation, memory)
+- [x] Interaction bracketing (startInteraction/endInteraction)
 
 #### 2.3 Navigation Detection
-- [ ] Navigation type classification (initial, hard, soft, none)
+- [x] Navigation type classification (initial, hard, soft, none)
 - [ ] Prefetch status detection
 - [ ] Navigation trigger identification
 
 #### 2.4 Cumulative Metrics
-- [ ] Total JS loaded tracking
-- [ ] Cache hit rate calculation
-- [ ] Memory high-water mark
-- [ ] Total CLS accumulation
+- [x] Total JS loaded tracking
+- [x] Cache hit rate calculation
+- [x] Memory high-water mark
+- [x] Total CLS accumulation
 
 **Deliverable:** Working `traverse journey checkout-flow.ts --base-url http://localhost:3000`
 
@@ -222,23 +222,24 @@ traverse/
 **Goal:** `traverse analyze` inspects build outputs without running the app.
 
 #### 3.1 Framework Detection
-- [ ] Auto-detect Next.js, React Router, SvelteKit, generic SPA
+- [x] Auto-detect Next.js, React Router, generic SPA
+- [ ] SvelteKit detection
 - [ ] Version detection
 
 #### 3.2 Bundle Analysis
-- [ ] Total bundle size (raw, gzip, brotli)
-- [ ] Per-entry breakdown
+- [x] Total bundle size (raw, gzip, brotli)
+- [x] Per-entry breakdown
 - [ ] Chunk analysis with module attribution
 - [ ] Duplicate dependency detection
 
 #### 3.3 Next.js Specifics
-- [ ] `.next/` build manifest parsing
-- [ ] App Router vs Pages Router detection
+- [x] `.next/` build manifest parsing
+- [x] App Router vs Pages Router detection
 - [ ] Server/Client Component boundary detection
 - [ ] RSC payload estimation
 
 #### 3.4 Route Analysis
-- [ ] Route structure mapping
+- [x] Route structure mapping (Next.js)
 - [ ] Dynamic segment detection
 - [ ] Route-to-bundle mapping
 
