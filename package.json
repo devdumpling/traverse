@@ -1,0 +1,16 @@
+{
+  "name": "traverse-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "packages/examples/apps/*"],
+  "scripts": {
+    "traverse": "bun run packages/traverse/src/cli/index.ts",
+    "test": "bun test --cwd packages/traverse",
+    "typecheck": "bun run --cwd packages/traverse typecheck",
+    "build:next": "bun run --cwd packages/examples/apps/basic-next-app build",
+    "build:rr": "bun run --cwd packages/examples/apps/basic-rr-app build",
+    "build:react": "bun run --cwd packages/examples/apps/basic-react build",
+    "start:next": "bun run --cwd packages/examples/apps/basic-next-app start -- -p 3001",
+    "start:rr": "bun run --cwd packages/examples/apps/basic-rr-app start",
+    "start:react": "bun run --cwd packages/examples/apps/basic-react start"
+  }
+}
