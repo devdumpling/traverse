@@ -11,6 +11,8 @@ import type {
   RuntimeBenchmark,
   RuntimeRun,
   HydrationFramework,
+  ResourceType,
+  ResourceTypeMetrics,
 } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { launchBrowser, createContext, closeBrowser } from '../browser/launch.ts';
@@ -28,6 +30,12 @@ export interface BenchOptions {
   readonly network: NetworkConfig | null;
 }
 
+interface ResourceTypeBreakdown {
+  readonly count: number;
+  readonly transferSize: number;
+  readonly decodedSize: number;
+}
+
 interface SingleRunResult {
   readonly cwv: {
     readonly lcp: number | null;
@@ -39,6 +47,7 @@ interface SingleRunResult {
     readonly totalTransfer: number;
     readonly totalCount: number;
     readonly fromCache: number;
+    readonly byType: Record<string, ResourceTypeBreakdown>;
   };
   readonly timing: {
     readonly domContentLoaded: number;
@@ -61,6 +70,33 @@ interface SingleRunResult {
     readonly rscChunkCount: number;
   };
 }
+
+const RESOURCE_TYPES: readonly ResourceType[] = [
+  'script', 'stylesheet', 'image', 'font', 'fetch', 'document', 'other'
+] as const;
+
+const aggregateByType = (
+  results: readonly SingleRunResult[]
+): Partial<Record<ResourceType, ResourceTypeMetrics>> => {
+  const aggregated: Partial<Record<ResourceType, ResourceTypeMetrics>> = {};
+
+  for (const type of RESOURCE_TYPES) {
+    const counts = results.map((r) => r.resources.byType[type]?.count ?? 0);
+    const transfers = results.map((r) => r.resources.byType[type]?.transferSize ?? 0);
+    const decoded = results.map((r) => r.resources.byType[type]?.decodedSize ?? 0);
+
+    // Only include types that have data
+    if (counts.some((c) => c > 0)) {
+      aggregated[type] = {
+        count: aggregate(counts),
+        transferSize: aggregate(transfers),
+        decodedSize: aggregate(decoded),
+      };
+    }
+  }
+
+  return aggregated;
+};
 
 const runSingleBenchmark = async (
   page: Page,
@@ -125,6 +161,7 @@ const runSingleBenchmark = async (
       totalTransfer: resourcesResult.value.totalTransfer,
       totalCount: resourcesResult.value.totalCount,
       fromCache: resourcesResult.value.fromCache,
+      byType: resourcesResult.value.byType,
     },
     timing: timingResult.value,
     heapSize: heapResult.value,
@@ -235,7 +272,7 @@ export const runBenchmark = async (
       resources: {
         totalTransfer: aggregate(singleResults.map((r) => r.resources.totalTransfer)),
         totalCount: aggregate(singleResults.map((r) => r.resources.totalCount)),
-        byType: {},
+        byType: aggregateByType(singleResults),
       },
       javascript: {
         mainThreadBlocking: aggregate(singleResults.map((r) => r.blocking.totalBlockingTime)),

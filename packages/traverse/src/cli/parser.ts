@@ -279,6 +279,25 @@ const parseValidate = (
   });
 };
 
+const parseBuild = (
+  positional: readonly string[],
+  flags: Record<string, string | true>
+): Result<Command, ParseError> => {
+  const projectDir = positional[1] ?? '.';
+
+  const formatResult = getFormat(flags);
+  if (!formatResult.ok) return formatResult;
+
+  return ok({
+    command: 'build',
+    projectDir,
+    buildCmd: getFlag(flags, 'cmd', 'c'),
+    clearCache: !hasFlag(flags, 'no-cache'),
+    output: getFlag(flags, 'output', 'o'),
+    format: formatResult.value,
+  });
+};
+
 export const parse = (argv: readonly string[]): Result<Command, ParseError> => {
   // Skip first two args (bun executable and script path)
   const args = argv.slice(2);
@@ -310,6 +329,8 @@ export const parse = (argv: readonly string[]): Result<Command, ParseError> => {
       return parseAnalyze(positional, flags);
     case 'compare':
       return parseCompare(positional, flags);
+    case 'build':
+      return parseBuild(positional, flags);
     case 'report':
       return parseReport(positional, flags);
     case 'init':

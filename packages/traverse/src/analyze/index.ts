@@ -3,11 +3,12 @@
  * Analyzes build outputs to extract bundle sizes, routes, and framework-specific data.
  */
 
-import type { Result, StaticAnalysis, RouteAnalysis } from '../types.ts';
+import type { Result, StaticAnalysis, RouteAnalysis, DependencyCount } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { detectFramework, type DetectionResult } from './detect.ts';
 import { analyzeBundles } from './bundles.ts';
 import { analyzeNextJs } from './nextjs.ts';
+import { analyzeDependencies } from './dependencies.ts';
 
 export interface AnalyzeError {
   readonly code: 'NO_SOURCE_DIR' | 'NO_BUILD_DIR' | 'ANALYSIS_FAILED';
@@ -45,14 +46,23 @@ export const analyze = async (
     });
   }
 
-  // Analyze bundles
-  const bundleResult = await analyzeBundles(buildDir);
+  // Analyze bundles with framework info for better vendor detection
+  const bundleResult = await analyzeBundles({
+    buildDir,
+    framework: detection.framework,
+  });
   if (!bundleResult.ok) {
     return err({
       code: 'ANALYSIS_FAILED',
       message: bundleResult.error.message,
     });
   }
+
+  // Analyze dependencies
+  const depsResult = await analyzeDependencies(options.sourceDir);
+  const dependencies: DependencyCount = depsResult.ok 
+    ? depsResult.value 
+    : { dependencies: 0, devDependencies: 0, total: 0, topDependencies: [] };
 
   // Framework-specific analysis
   let frameworkSpecific = null;
@@ -80,6 +90,7 @@ export const analyze = async (
       buildDir,
     },
     bundles: bundleResult.value,
+    dependencies,
     routes,
     frameworkSpecific,
   });
@@ -89,3 +100,5 @@ export const analyze = async (
 export { detectFramework } from './detect.ts';
 export { analyzeBundles, formatByteSize } from './bundles.ts';
 export { analyzeNextJs } from './nextjs.ts';
+export { analyzeDependencies } from './dependencies.ts';
+export { parseManifest, parseNextJsManifest, parseViteManifest } from './manifests.ts';

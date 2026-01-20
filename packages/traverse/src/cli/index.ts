@@ -10,6 +10,7 @@ import { executeJourney } from './commands/journey.ts';
 import { executeValidate } from './commands/validate.ts';
 import { executeAnalyze } from './commands/analyze.ts';
 import { executeCompare } from './commands/compare.ts';
+import { executeBuild } from './commands/build.ts';
 import { match } from '../result.ts';
 import type { Command } from '../types.ts';
 
@@ -37,6 +38,9 @@ const runCommand = async (command: Command): Promise<number> => {
 
     case 'compare':
       return executeCompare(command);
+
+    case 'build':
+      return executeBuild(command);
 
     case 'report':
       console.log(`Generating report from: ${command.captureFile}`);

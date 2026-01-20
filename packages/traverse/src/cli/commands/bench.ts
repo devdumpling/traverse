@@ -2,7 +2,7 @@
  * Bench command implementation.
  */
 
-import type { BenchCommand, RuntimeBenchmark } from '../../types.ts';
+import type { BenchCommand, RuntimeBenchmark, ResourceType } from '../../types.ts';
 import { runBenchmark } from '../../bench/index.ts';
 import { getDeviceConfig, getNetworkConfig } from '../../config/index.ts';
 
@@ -13,6 +13,37 @@ const formatBytes = (bytes: number): string => {
 };
 
 const formatMs = (ms: number): string => `${ms.toFixed(0)}ms`;
+
+const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
+  script: 'JavaScript',
+  stylesheet: 'CSS',
+  image: 'Images',
+  font: 'Fonts',
+  fetch: 'Fetch/XHR',
+  document: 'Document',
+  other: 'Other',
+};
+
+const formatResourcesByType = (result: RuntimeBenchmark): string => {
+  const types = Object.entries(result.resources.byType) as [ResourceType, NonNullable<typeof result.resources.byType[ResourceType]>][];
+  
+  if (types.length === 0) return '';
+
+  const rows = types
+    .sort(([, a], [, b]) => b.transferSize.median - a.transferSize.median)
+    .map(([type, metrics]) => 
+      `| ${RESOURCE_TYPE_LABELS[type]} | ${metrics.count.median.toFixed(0)} | ${formatBytes(metrics.transferSize.median)} | ${formatBytes(metrics.decodedSize.median)} |`
+    )
+    .join('\n');
+
+  return `## Resources by Type
+
+| Type | Count | Transfer | Decoded |
+|------|-------|----------|---------|
+${rows}
+
+`;
+};
 
 const formatOutput = (result: RuntimeBenchmark, format: 'json' | 'markdown' | 'html'): string => {
   if (format === 'json') {
@@ -59,7 +90,7 @@ ${result.ssr.reactRouterDataSize ? `| React Router Data | ${formatBytes(result.s
 | Total Transfer | ${formatBytes(result.resources.totalTransfer.median)} |
 | Resource Count | ${result.resources.totalCount.median.toFixed(0)} |
 
-## Timing & Blocking
+${formatResourcesByType(result)}## Timing & Blocking
 
 | Metric | Median |
 |--------|--------|

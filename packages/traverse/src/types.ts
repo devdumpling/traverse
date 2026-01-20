@@ -143,14 +143,24 @@ export interface BundleAnalysis {
   readonly total: ByteSize;
   readonly javascript: ByteSize;
   readonly css: ByteSize;
+  readonly vendor: ByteSize;
+  readonly nonVendor: ByteSize;
   readonly entries: readonly EntryAnalysis[];
   readonly chunks: readonly ChunkAnalysis[];
   readonly duplicates: readonly DuplicateDependency[];
 }
 
+export interface DependencyCount {
+  readonly dependencies: number;
+  readonly devDependencies: number;
+  readonly total: number;
+  readonly topDependencies: readonly string[];
+}
+
 export interface StaticAnalysis {
   readonly meta: StaticAnalysisMeta;
   readonly bundles: BundleAnalysis;
+  readonly dependencies: DependencyCount;
   readonly routes: readonly RouteAnalysis[];
   readonly frameworkSpecific: NextJsAnalysis | null;
 }
@@ -199,10 +209,10 @@ export interface ExtendedMetrics {
   readonly hydration: AggregatedMetric | null;
 }
 
-export interface ResourceMetrics {
+export interface ResourceTypeMetrics {
   readonly count: AggregatedMetric;
-  readonly transferred: AggregatedMetric;
-  readonly fromCache: AggregatedMetric;
+  readonly transferSize: AggregatedMetric;
+  readonly decodedSize: AggregatedMetric;
 }
 
 export interface JavaScriptMetrics {
@@ -264,7 +274,7 @@ export interface RuntimeBenchmark {
   readonly resources: {
     readonly totalTransfer: AggregatedMetric;
     readonly totalCount: AggregatedMetric;
-    readonly byType: Partial<Record<ResourceType, ResourceMetrics>>;
+    readonly byType: Partial<Record<ResourceType, ResourceTypeMetrics>>;
   };
   readonly javascript: JavaScriptMetrics;
   readonly ssr: SsrMetrics;
@@ -396,6 +406,15 @@ export interface ReportCommand {
   readonly template: string | null;
 }
 
+export interface BuildCommand {
+  readonly command: 'build';
+  readonly projectDir: string;
+  readonly buildCmd: string | null;
+  readonly clearCache: boolean;
+  readonly output: string | null;
+  readonly format: OutputFormat;
+}
+
 export interface InitCommand {
   readonly command: 'init';
 }
@@ -419,6 +438,7 @@ export type Command =
   | JourneyCommand
   | AnalyzeCommand
   | CompareCommand
+  | BuildCommand
   | ReportCommand
   | InitCommand
   | ValidateCommand

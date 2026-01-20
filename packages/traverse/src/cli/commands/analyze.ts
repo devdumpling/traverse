@@ -15,7 +15,15 @@ const formatOutput = (
   }
 
   if (format === 'markdown') {
-    const { meta, bundles, routes, frameworkSpecific } = result;
+    const { meta, bundles, dependencies, routes, frameworkSpecific } = result;
+    
+    // Calculate vendor ratio
+    const vendorRatio = bundles.javascript.gzip > 0
+      ? ((bundles.vendor.gzip / bundles.javascript.gzip) * 100).toFixed(1)
+      : '0';
+    const appRatio = bundles.javascript.gzip > 0
+      ? ((bundles.nonVendor.gzip / bundles.javascript.gzip) * 100).toFixed(1)
+      : '0';
     
     let md = `# Static Analysis
 
@@ -31,6 +39,23 @@ const formatOutput = (
 | **Total** | ${formatByteSize(bundles.total.raw)} | ${formatByteSize(bundles.total.gzip)} | ${formatByteSize(bundles.total.brotli)} |
 | JavaScript | ${formatByteSize(bundles.javascript.raw)} | ${formatByteSize(bundles.javascript.gzip)} | ${formatByteSize(bundles.javascript.brotli)} |
 | CSS | ${formatByteSize(bundles.css.raw)} | ${formatByteSize(bundles.css.gzip)} | ${formatByteSize(bundles.css.brotli)} |
+
+## JavaScript Breakdown
+
+| Category | Gzip | % of JS |
+|----------|------|---------|
+| Vendor/Framework | ${formatByteSize(bundles.vendor.gzip)} | ${vendorRatio}% |
+| Application Code | ${formatByteSize(bundles.nonVendor.gzip)} | ${appRatio}% |
+
+## Dependencies
+
+| Category | Count |
+|----------|-------|
+| Production | ${dependencies.dependencies} |
+| Dev | ${dependencies.devDependencies} |
+| **Total** | ${dependencies.total} |
+
+${dependencies.topDependencies.length > 0 ? `**Key dependencies:** ${dependencies.topDependencies.slice(0, 5).join(', ')}` : ''}
 
 ## Chunks (${bundles.chunks.length})
 
