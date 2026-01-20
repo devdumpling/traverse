@@ -17,7 +17,7 @@ import { ok, err } from '../result.ts';
 import { launchBrowser, createContext, closeBrowser } from '../browser/launch.ts';
 import { aggregate, aggregateNullable } from '../bench/aggregator.ts';
 import type { JourneyDefinition, StepContext } from './define.ts';
-import { createCaptureContext, type StepCaptureData } from './context.ts';
+import { createCaptureContext, createNavigationTracker, type StepCaptureData } from './context.ts';
 
 export interface JourneyRunOptions {
   readonly journey: JourneyDefinition;
@@ -59,17 +59,22 @@ const runSingleJourney = async (
 
   const page = await context.newPage();
   const steps: SingleStepResult[] = [];
+  const navigationTracker = createNavigationTracker();
 
   try {
     await options.journey.run({
       step: async (name, fn) => {
         const data = createEmptyCaptureData();
-        const captureContext = createCaptureContext(page, data);
+        const captureContext = createCaptureContext(page, data, navigationTracker);
         const stepContext: StepContext = { page, capture: captureContext };
 
         const startTime = performance.now();
         await fn(stepContext);
         const endTime = performance.now();
+
+        // Always finalize navigation state after step completes
+        // This ensures accurate tracking even if capture.navigation() wasn't called
+        await navigationTracker.finalizeStep(page);
 
         steps.push({ name, startTime, endTime, data });
       },

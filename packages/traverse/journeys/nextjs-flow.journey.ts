@@ -14,6 +14,7 @@ export default defineJourney({
     await ctx.step('homepage', async ({ page, capture }) => {
       await page.goto('/');
       await page.waitForLoadState('networkidle');
+      await capture.navigation();
       await capture.cwv();
       await capture.resources();
       await capture.memory();

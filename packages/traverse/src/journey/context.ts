@@ -122,47 +122,147 @@ const resourceCaptureScript = `() => {
   };
 }`;
 
-// Browser-context navigation detection
-const navigationDetectScript = `() => {
+// Browser-context script to get navigation timing data
+const getNavigationTimingScript = `() => {
   const navEntries = performance.getEntriesByType('navigation');
   const navEntry = navEntries[0];
   
-  if (!navEntry) {
-    return { type: 'none', trigger: null, prefetchStatus: null, duration: 0 };
-  }
-  
-  const navType = navEntry.type;
-  let type = 'hard';
-  
-  if (navType === 'navigate') type = 'initial';
-  else if (navType === 'reload') type = 'hard';
-  else if (navType === 'back_forward') type = 'hard';
-  
-  // Check for soft navigation API (if available)
-  if (typeof PerformanceObserver !== 'undefined') {
-    try {
-      const softNavEntries = performance.getEntriesByType('soft-navigation');
-      if (softNavEntries && softNavEntries.length > 0) {
-        type = 'soft';
-      }
-    } catch (e) {}
-  }
-  
-  const trigger = navType === 'back_forward' ? 'back-forward' 
-    : navType === 'reload' ? 'reload' 
-    : 'link';
-  
   return {
-    type,
-    trigger,
-    prefetchStatus: null,
-    duration: navEntry.loadEventEnd - navEntry.startTime,
+    url: window.location.href,
+    navType: navEntry?.type ?? null,
+    requestStart: navEntry?.requestStart ?? 0,
+    loadEventEnd: navEntry?.loadEventEnd ?? 0,
+    startTime: navEntry?.startTime ?? 0,
   };
 }`;
 
+interface NavigationTimingData {
+  url: string;
+  navType: string | null;
+  requestStart: number;
+  loadEventEnd: number;
+  startTime: number;
+}
+
+/**
+ * Tracks navigation state across journey steps.
+ * Determines if navigations are initial, hard (full reload), or soft (SPA).
+ * 
+ * IMPORTANT: Call `finalizeStep()` after each step completes to ensure
+ * accurate tracking even if `captureAndClassify()` wasn't called.
+ */
+export interface NavigationTracker {
+  /** Capture current navigation state and classify the navigation type */
+  captureAndClassify(page: Page): Promise<NavigationData>;
+  /** Update internal state after a step completes (call even if navigation wasn't captured) */
+  finalizeStep(page: Page): Promise<void>;
+}
+
+export const createNavigationTracker = (): NavigationTracker => {
+  let previousUrl: string | null = null;
+  let previousRequestStart: number | null = null;
+  let stepIndex = 0;
+  let capturedThisStep = false;
+
+  const getTiming = async (page: Page): Promise<NavigationTimingData> => {
+    return page.evaluate(`(${getNavigationTimingScript})()`) as Promise<NavigationTimingData>;
+  };
+
+  const classify = (timing: NavigationTimingData): NavigationData => {
+    const currentStepIndex = stepIndex;
+
+    // First step is always initial
+    if (currentStepIndex === 0) {
+      return {
+        type: 'initial',
+        trigger: 'link',
+        prefetchStatus: null,
+        duration: timing.loadEventEnd - timing.startTime,
+      };
+    }
+
+    // No previous URL means we can't compare - treat as initial
+    if (!previousUrl) {
+      return {
+        type: 'initial',
+        trigger: 'link',
+        prefetchStatus: null,
+        duration: timing.loadEventEnd - timing.startTime,
+      };
+    }
+
+    // URL didn't change - no navigation
+    if (previousUrl === timing.url) {
+      return {
+        type: 'none',
+        trigger: null,
+        prefetchStatus: null,
+        duration: 0,
+      };
+    }
+
+    // URL changed - determine if hard or soft navigation
+    // Hard navigation: requestStart changed (page fully reloaded)
+    // Soft navigation: same requestStart (client-side routing via History API)
+    const isHardNavigation = 
+      previousRequestStart !== null && 
+      timing.requestStart !== previousRequestStart;
+
+    if (isHardNavigation) {
+      const trigger: NavigationTrigger = 
+        timing.navType === 'back_forward' ? 'back-forward' :
+        timing.navType === 'reload' ? 'reload' : 'link';
+      return {
+        type: 'hard',
+        trigger,
+        prefetchStatus: null,
+        duration: timing.loadEventEnd - timing.startTime,
+      };
+    }
+
+    // URL changed but requestStart unchanged = soft navigation (SPA)
+    return {
+      type: 'soft',
+      trigger: 'programmatic',
+      prefetchStatus: null,
+      duration: 0, // Soft navigations don't have navigation timing
+    };
+  };
+
+  return {
+    async captureAndClassify(page: Page): Promise<NavigationData> {
+      const timing = await getTiming(page);
+      capturedThisStep = true;
+      
+      const result = classify(timing);
+      
+      // Update state immediately when captured
+      previousUrl = timing.url;
+      previousRequestStart = timing.requestStart;
+      
+      return result;
+    },
+
+    async finalizeStep(page: Page): Promise<void> {
+      // If navigation wasn't captured this step, update state anyway
+      // to ensure next step has accurate comparison baseline
+      if (!capturedThisStep) {
+        const timing = await getTiming(page);
+        previousUrl = timing.url;
+        previousRequestStart = timing.requestStart;
+      }
+      
+      // Reset for next step and increment counter
+      capturedThisStep = false;
+      stepIndex++;
+    },
+  };
+};
+
 export const createCaptureContext = (
   page: Page,
-  data: StepCaptureData
+  data: StepCaptureData,
+  navigationTracker: NavigationTracker
 ): CaptureContext => {
   let cdpSession: CDPSession | null = null;
   let interactionStartTime: number | null = null;
@@ -190,7 +290,7 @@ export const createCaptureContext = (
     },
 
     async navigation(): Promise<void> {
-      const navData = await page.evaluate(`(${navigationDetectScript})()`) as NavigationData;
+      const navData = await navigationTracker.captureAndClassify(page);
       data.navigation = navData;
     },
 
