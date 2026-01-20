@@ -1,5 +1,10 @@
 import { describe, test, expect } from 'bun:test';
 import { loadJourney, validateJourney } from './loader.ts';
+import { dirname, join } from 'path';
+
+// Get the package root directory
+const packageRoot = join(dirname(import.meta.path), '../..');
+const exampleJourneyPath = join(packageRoot, 'journeys/example.journey.ts');
 
 describe('loadJourney', () => {
   test('returns error for non-existent file', async () => {
@@ -11,7 +16,7 @@ describe('loadJourney', () => {
   });
 
   test('loads valid journey file', async () => {
-    const result = await loadJourney('journeys/example.journey.ts');
+    const result = await loadJourney(exampleJourneyPath);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.name).toBe('example-journey');
@@ -28,7 +33,7 @@ describe('validateJourney', () => {
   });
 
   test('validates existing journey file', async () => {
-    const result = await validateJourney('journeys/example.journey.ts');
+    const result = await validateJourney(exampleJourneyPath);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.valid).toBe(true);
