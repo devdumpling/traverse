@@ -10,12 +10,15 @@ import type {
   NetworkConfig,
   RuntimeBenchmark,
   RuntimeRun,
+  HydrationFramework,
 } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { launchBrowser, createContext, closeBrowser } from '../browser/launch.ts';
 import { createCdpSession, enablePerformanceMetrics, emulateNetworkConditions, clearBrowserCache, getHeapSize } from '../browser/cdp.ts';
 import { captureCwv, captureNavigationTiming } from '../capture/cwv.ts';
 import { captureResources } from '../capture/resources.ts';
+import { captureSsr } from '../capture/ssr.ts';
+import { captureBlocking, injectLongTaskObserver } from '../capture/blocking.ts';
 import { aggregate, aggregateNullable } from './aggregator.ts';
 
 export interface BenchOptions {
@@ -42,6 +45,21 @@ interface SingleRunResult {
     readonly load: number;
   };
   readonly heapSize: number;
+  readonly blocking: {
+    readonly totalBlockingTime: number;
+    readonly longTaskCount: number;
+  };
+  readonly ssr: {
+    readonly hasContent: boolean;
+    readonly inlineScriptSize: number;
+    readonly inlineScriptCount: number;
+    readonly hydrationPayloadSize: number;
+    readonly hydrationFramework: HydrationFramework;
+    readonly nextDataSize: number;
+    readonly reactRouterDataSize: number;
+    readonly rscPayloadSize: number;
+    readonly rscChunkCount: number;
+  };
 }
 
 const runSingleBenchmark = async (
@@ -49,6 +67,10 @@ const runSingleBenchmark = async (
   url: string,
   network: NetworkConfig | null
 ): Promise<Result<SingleRunResult, BrowserError>> => {
+  // Inject long task observer before navigation
+  const observerResult = await injectLongTaskObserver(page);
+  if (!observerResult.ok) return observerResult;
+
   const cdpResult = await createCdpSession(page);
   if (!cdpResult.ok) return cdpResult;
   const cdp = cdpResult.value;
@@ -86,6 +108,12 @@ const runSingleBenchmark = async (
   const heapResult = await getHeapSize(cdp);
   if (!heapResult.ok) return heapResult;
 
+  const blockingResult = await captureBlocking(page);
+  if (!blockingResult.ok) return blockingResult;
+
+  const ssrResult = await captureSsr(page);
+  if (!ssrResult.ok) return ssrResult;
+
   return ok({
     cwv: {
       lcp: cwvResult.value.lcp,
@@ -100,6 +128,21 @@ const runSingleBenchmark = async (
     },
     timing: timingResult.value,
     heapSize: heapResult.value,
+    blocking: {
+      totalBlockingTime: blockingResult.value.totalBlockingTime,
+      longTaskCount: blockingResult.value.longTaskCount,
+    },
+    ssr: {
+      hasContent: ssrResult.value.hasContent,
+      inlineScriptSize: ssrResult.value.inlineScripts.totalSize,
+      inlineScriptCount: ssrResult.value.inlineScripts.count,
+      hydrationPayloadSize: ssrResult.value.hydration.payloadSize,
+      hydrationFramework: ssrResult.value.hydration.framework,
+      nextDataSize: ssrResult.value.hydration.nextData.size,
+      reactRouterDataSize: ssrResult.value.hydration.reactRouterData.size,
+      rscPayloadSize: ssrResult.value.hydration.rscPayload.size,
+      rscChunkCount: ssrResult.value.hydration.rscPayload.chunkCount,
+    },
   });
 };
 
@@ -149,11 +192,18 @@ export const runBenchmark = async (
           fromCache: result.value.resources.fromCache,
         },
         javascript: {
-          mainThreadBlocking: 0,
-          longTaskCount: 0,
+          mainThreadBlocking: result.value.blocking.totalBlockingTime,
+          longTaskCount: result.value.blocking.longTaskCount,
           heapSize: result.value.heapSize,
         },
         timing: result.value.timing,
+        ssr: {
+          hasContent: result.value.ssr.hasContent,
+          inlineScriptSize: result.value.ssr.inlineScriptSize,
+          inlineScriptCount: result.value.ssr.inlineScriptCount,
+          hydrationPayloadSize: result.value.ssr.hydrationPayloadSize,
+          hydrationFramework: result.value.ssr.hydrationFramework,
+        },
       });
     }
 
@@ -177,7 +227,7 @@ export const runBenchmark = async (
       },
       extended: {
         tti: null,
-        tbt: aggregate(singleResults.map(() => 0)),
+        tbt: aggregate(singleResults.map((r) => r.blocking.totalBlockingTime)),
         domContentLoaded: aggregate(singleResults.map((r) => r.timing.domContentLoaded)),
         load: aggregate(singleResults.map((r) => r.timing.load)),
         hydration: null,
@@ -188,9 +238,28 @@ export const runBenchmark = async (
         byType: {},
       },
       javascript: {
-        mainThreadBlocking: aggregate(singleResults.map(() => 0)),
-        longTasks: aggregate(singleResults.map(() => 0)),
+        mainThreadBlocking: aggregate(singleResults.map((r) => r.blocking.totalBlockingTime)),
+        longTasks: aggregate(singleResults.map((r) => r.blocking.longTaskCount)),
         heapSize: aggregate(singleResults.map((r) => r.heapSize)),
+      },
+      ssr: {
+        hasContent: aggregate(singleResults.map((r) => r.ssr.hasContent ? 1 : 0)),
+        inlineScriptSize: aggregate(singleResults.map((r) => r.ssr.inlineScriptSize)),
+        inlineScriptCount: aggregate(singleResults.map((r) => r.ssr.inlineScriptCount)),
+        hydrationPayloadSize: aggregate(singleResults.map((r) => r.ssr.hydrationPayloadSize)),
+        hydrationFramework: singleResults[0]?.ssr.hydrationFramework ?? null,
+        nextDataSize: singleResults.some((r) => r.ssr.nextDataSize > 0)
+          ? aggregate(singleResults.map((r) => r.ssr.nextDataSize))
+          : null,
+        reactRouterDataSize: singleResults.some((r) => r.ssr.reactRouterDataSize > 0)
+          ? aggregate(singleResults.map((r) => r.ssr.reactRouterDataSize))
+          : null,
+        rscPayloadSize: singleResults.some((r) => r.ssr.rscPayloadSize > 0)
+          ? aggregate(singleResults.map((r) => r.ssr.rscPayloadSize))
+          : null,
+        rscChunkCount: singleResults.some((r) => r.ssr.rscChunkCount > 0)
+          ? aggregate(singleResults.map((r) => r.ssr.rscChunkCount))
+          : null,
       },
       runs,
     };

@@ -20,6 +20,23 @@ const formatOutput = (result: RuntimeBenchmark, format: 'json' | 'markdown' | 'h
   }
 
   if (format === 'markdown') {
+    const ssrSection = result.ssr.hydrationFramework 
+      ? `## SSR & Hydration
+
+| Metric | Median |
+|--------|--------|
+| Framework | ${result.ssr.hydrationFramework} |
+| Has SSR Content | ${result.ssr.hasContent.median > 0.5 ? 'Yes' : 'No'} |
+| Inline Script Size | ${formatBytes(result.ssr.inlineScriptSize.median)} |
+| Inline Script Count | ${result.ssr.inlineScriptCount.median.toFixed(0)} |
+| Hydration Payload | ${formatBytes(result.ssr.hydrationPayloadSize.median)} |
+${result.ssr.rscPayloadSize ? `| RSC Payload | ${formatBytes(result.ssr.rscPayloadSize.median)} |` : ''}
+${result.ssr.nextDataSize ? `| __NEXT_DATA__ Size | ${formatBytes(result.ssr.nextDataSize.median)} |` : ''}
+${result.ssr.reactRouterDataSize ? `| React Router Data | ${formatBytes(result.ssr.reactRouterDataSize.median)} |` : ''}
+
+`
+      : '';
+
     return `# Benchmark Results
 
 **URL:** ${result.meta.url}  
@@ -42,13 +59,17 @@ const formatOutput = (result: RuntimeBenchmark, format: 'json' | 'markdown' | 'h
 | Total Transfer | ${formatBytes(result.resources.totalTransfer.median)} |
 | Resource Count | ${result.resources.totalCount.median.toFixed(0)} |
 
-## Timing
+## Timing & Blocking
 
 | Metric | Median |
 |--------|--------|
 | DOM Content Loaded | ${formatMs(result.extended.domContentLoaded.median)} |
 | Load | ${formatMs(result.extended.load.median)} |
-`;
+| Total Blocking Time | ${formatMs(result.extended.tbt.median)} |
+| Long Tasks | ${result.javascript.longTasks.median.toFixed(0)} |
+| Heap Size | ${formatBytes(result.javascript.heapSize.median)} |
+
+${ssrSection}`;
   }
 
   // HTML format - simple for now

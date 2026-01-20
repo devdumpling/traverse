@@ -211,6 +211,20 @@ export interface JavaScriptMetrics {
   readonly heapSize: AggregatedMetric;
 }
 
+export type HydrationFramework = 'next' | 'react-router' | 'remix' | 'unknown' | null;
+
+export interface SsrMetrics {
+  readonly hasContent: AggregatedMetric;
+  readonly inlineScriptSize: AggregatedMetric;
+  readonly inlineScriptCount: AggregatedMetric;
+  readonly hydrationPayloadSize: AggregatedMetric;
+  readonly hydrationFramework: HydrationFramework;
+  readonly nextDataSize: AggregatedMetric | null;
+  readonly reactRouterDataSize: AggregatedMetric | null;
+  readonly rscPayloadSize: AggregatedMetric | null;
+  readonly rscChunkCount: AggregatedMetric | null;
+}
+
 export interface RuntimeRun {
   readonly index: number;
   readonly cwv: {
@@ -234,6 +248,13 @@ export interface RuntimeRun {
     readonly domContentLoaded: number;
     readonly load: number;
   };
+  readonly ssr: {
+    readonly hasContent: boolean;
+    readonly inlineScriptSize: number;
+    readonly inlineScriptCount: number;
+    readonly hydrationPayloadSize: number;
+    readonly hydrationFramework: HydrationFramework;
+  };
 }
 
 export interface RuntimeBenchmark {
@@ -246,6 +267,7 @@ export interface RuntimeBenchmark {
     readonly byType: Partial<Record<ResourceType, ResourceMetrics>>;
   };
   readonly javascript: JavaScriptMetrics;
+  readonly ssr: SsrMetrics;
   readonly runs: readonly RuntimeRun[];
 }
 
