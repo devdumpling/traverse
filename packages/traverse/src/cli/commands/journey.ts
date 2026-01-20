@@ -108,7 +108,8 @@ export const executeJourney = async (command: JourneyCommand): Promise<number> =
     return 1;
   }
 
-  console.log(`Loading journey: ${command.journeyFile}...`);
+  // Status messages go to stderr so stdout is clean for output
+  console.error(`Loading journey: ${command.journeyFile}...`);
   
   const loadResult = await loadJourney(command.journeyFile);
   if (!loadResult.ok) {
@@ -118,11 +119,11 @@ export const executeJourney = async (command: JourneyCommand): Promise<number> =
 
   const journey = loadResult.value;
   
-  console.log(`Running journey: ${journey.name}`);
-  console.log(`  Description: ${journey.description}`);
-  console.log(`  Base URL: ${command.baseUrl}`);
-  console.log(`  Runs: ${command.runs}`);
-  console.log();
+  console.error(`Running journey: ${journey.name}`);
+  console.error(`  Description: ${journey.description}`);
+  console.error(`  Base URL: ${command.baseUrl}`);
+  console.error(`  Runs: ${command.runs}`);
+  console.error();
 
   const result = await runJourney({
     journey,
@@ -140,7 +141,7 @@ export const executeJourney = async (command: JourneyCommand): Promise<number> =
 
   if (command.output) {
     await Bun.write(command.output, output);
-    console.log(`Results written to ${command.output}`);
+    console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);
   }

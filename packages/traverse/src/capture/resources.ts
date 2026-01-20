@@ -20,6 +20,10 @@ export interface ResourceEntry {
 
 export interface ResourceCapture {
   readonly entries: readonly ResourceEntry[];
+  readonly document: {
+    readonly transferSize: number;
+    readonly decodedBodySize: number;
+  };
   readonly totalTransfer: number;
   readonly totalCount: number;
   readonly fromCache: number;
@@ -69,24 +73,38 @@ const inferCacheStatus = (entry: RawResourceEntry): ResourceCacheStatus => {
   return 'network';
 };
 
-// Browser-context function to capture resource entries
+// Browser-context function to capture resource entries and document
 const resourceCaptureFunction = `() => {
-  const entries = performance.getEntriesByType('resource');
-  return entries.map((entry) => ({
-    name: entry.name,
-    initiatorType: entry.initiatorType,
-    transferSize: entry.transferSize,
-    encodedBodySize: entry.encodedBodySize,
-    decodedBodySize: entry.decodedBodySize,
-    duration: entry.duration,
-  }));
+  const resourceEntries = performance.getEntriesByType('resource');
+  const navEntries = performance.getEntriesByType('navigation');
+  const navEntry = navEntries[0];
+  
+  return {
+    resources: resourceEntries.map((entry) => ({
+      name: entry.name,
+      initiatorType: entry.initiatorType,
+      transferSize: entry.transferSize,
+      encodedBodySize: entry.encodedBodySize,
+      decodedBodySize: entry.decodedBodySize,
+      duration: entry.duration,
+    })),
+    document: navEntry ? {
+      transferSize: navEntry.transferSize,
+      decodedBodySize: navEntry.decodedBodySize,
+    } : null,
+  };
 }`;
+
+interface RawCaptureResult {
+  resources: RawResourceEntry[];
+  document: { transferSize: number; decodedBodySize: number } | null;
+}
 
 export const captureResources = async (
   page: Page
 ): Promise<Result<ResourceCapture, BrowserError>> => {
   const result = await fromPromise(
-    page.evaluate(`(${resourceCaptureFunction})()`) as Promise<RawResourceEntry[]>,
+    page.evaluate(`(${resourceCaptureFunction})()`) as Promise<RawCaptureResult>,
     (e): BrowserError => ({
       code: 'CDP_ERROR',
       message: e instanceof Error ? e.message : 'Failed to capture resources',
@@ -96,7 +114,7 @@ export const captureResources = async (
 
   if (!result.ok) return result;
 
-  const entries: ResourceEntry[] = result.value.map((raw) => ({
+  const entries: ResourceEntry[] = result.value.resources.map((raw) => ({
     name: raw.name,
     type: inferResourceType(raw),
     transferSize: raw.transferSize,
@@ -106,13 +124,16 @@ export const captureResources = async (
     cacheStatus: inferCacheStatus(raw),
   }));
 
-  const totalTransfer = entries.reduce((sum, e) => sum + e.transferSize, 0);
+  const document = result.value.document ?? { transferSize: 0, decodedBodySize: 0 };
+  const resourceTransfer = entries.reduce((sum, e) => sum + e.transferSize, 0);
+  const totalTransfer = resourceTransfer + document.transferSize;
   const fromCache = entries.filter((e) => e.cacheStatus !== 'network').length;
 
   return ok({
     entries,
+    document,
     totalTransfer,
-    totalCount: entries.length,
+    totalCount: entries.length + 1, // +1 for document
     fromCache,
   });
 };

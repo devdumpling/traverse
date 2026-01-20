@@ -172,14 +172,15 @@ export const executeAnalyze = async (command: AnalyzeCommand): Promise<number> =
   const sourceDir = resolve(process.cwd(), command.sourceDir);
   const buildDir = command.buildDir ? resolve(process.cwd(), command.buildDir) : undefined;
 
-  console.log(`Analyzing ${sourceDir}...`);
+  // Status messages go to stderr so stdout is clean for output
+  console.error(`Analyzing ${sourceDir}...`);
   if (buildDir) {
-    console.log(`  Build dir: ${buildDir}`);
+    console.error(`  Build dir: ${buildDir}`);
   }
   if (command.framework) {
-    console.log(`  Framework hint: ${command.framework}`);
+    console.error(`  Framework hint: ${command.framework}`);
   }
-  console.log();
+  console.error();
 
   const result = await analyze({
     sourceDir,
@@ -196,7 +197,7 @@ export const executeAnalyze = async (command: AnalyzeCommand): Promise<number> =
 
   if (command.output) {
     await Bun.write(command.output, output);
-    console.log(`Results written to ${command.output}`);
+    console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);
   }

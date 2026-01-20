@@ -94,11 +94,12 @@ export const executeBench = async (command: BenchCommand): Promise<number> => {
     return 1;
   }
 
-  console.log(`Benchmarking ${command.url}...`);
-  console.log(`  Runs: ${command.runs}`);
-  console.log(`  Device: ${command.device}`);
-  console.log(`  Network: ${command.network ?? 'none'}`);
-  console.log();
+  // Status messages go to stderr so stdout is clean for output
+  console.error(`Benchmarking ${command.url}...`);
+  console.error(`  Runs: ${command.runs}`);
+  console.error(`  Device: ${command.device}`);
+  console.error(`  Network: ${command.network ?? 'none'}`);
+  console.error();
 
   const result = await runBenchmark({
     url: command.url,
@@ -116,7 +117,7 @@ export const executeBench = async (command: BenchCommand): Promise<number> => {
 
   if (command.output) {
     await Bun.write(command.output, output);
-    console.log(`Results written to ${command.output}`);
+    console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);
   }
