@@ -9,6 +9,8 @@ import { executeBench } from './commands/bench.ts';
 import { executeJourney } from './commands/journey.ts';
 import { executeValidate } from './commands/validate.ts';
 import { executeAnalyze } from './commands/analyze.ts';
+import { executeCompare } from './commands/compare.ts';
+import { executeBuild } from './commands/build.ts';
 import { match } from '../result.ts';
 import type { Command } from '../types.ts';
 
@@ -35,11 +37,10 @@ const runCommand = async (command: Command): Promise<number> => {
       return executeAnalyze(command);
 
     case 'compare':
-      console.log(`Comparing:`);
-      console.log(`  Baseline: ${command.baseline}`);
-      console.log(`  Current: ${command.current}`);
-      console.log('\nCompare command not yet implemented.');
-      return 1;
+      return executeCompare(command);
+
+    case 'build':
+      return executeBuild(command);
 
     case 'report':
       console.log(`Generating report from: ${command.captureFile}`);

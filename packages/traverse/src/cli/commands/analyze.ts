@@ -3,8 +3,34 @@
  * Static analysis of build outputs.
  */
 
-import type { AnalyzeCommand, StaticAnalysis } from '../../types.ts';
+import type { AnalyzeCommand, StaticAnalysis, ArchitectureType, HydrationStrategy, DataStrategy } from '../../types.ts';
 import { analyze, formatByteSize } from '../../analyze/index.ts';
+
+const ARCHITECTURE_LABELS: Record<ArchitectureType, string> = {
+  mpa: 'Multi-Page App',
+  spa: 'Single-Page App',
+  transitional: 'Transitional',
+  islands: 'Islands',
+  unknown: 'Unknown',
+};
+
+const HYDRATION_LABELS: Record<HydrationStrategy, string> = {
+  full: 'Full hydration',
+  progressive: 'Progressive/Selective',
+  partial: 'Partial',
+  islands: 'Islands',
+  resumable: 'Resumable',
+  none: 'None',
+};
+
+const DATA_STRATEGY_LABELS: Record<DataStrategy, string> = {
+  rsc: 'React Server Components',
+  loaders: 'Route Loaders',
+  getServerSideProps: 'getServerSideProps',
+  'client-fetch': 'Client-side Fetch',
+  static: 'Static/Build-time',
+  mixed: 'Mixed',
+};
 
 const formatOutput = (
   result: StaticAnalysis,
@@ -15,7 +41,15 @@ const formatOutput = (
   }
 
   if (format === 'markdown') {
-    const { meta, bundles, routes, frameworkSpecific } = result;
+    const { meta, bundles, dependencies, routes, frameworkSpecific, architecture, runtime, routeCosts } = result;
+    
+    // Calculate vendor ratio
+    const vendorRatio = bundles.javascript.gzip > 0
+      ? ((bundles.vendor.gzip / bundles.javascript.gzip) * 100).toFixed(1)
+      : '0';
+    const appRatio = bundles.javascript.gzip > 0
+      ? ((bundles.nonVendor.gzip / bundles.javascript.gzip) * 100).toFixed(1)
+      : '0';
     
     let md = `# Static Analysis
 
@@ -23,14 +57,97 @@ const formatOutput = (
 **Analyzed:** ${meta.analyzedAt}  
 **Source:** ${meta.sourceDir}  
 **Build:** ${meta.buildDir}  
+`;
 
-## Bundle Sizes
+    // Architecture section (if available)
+    if (architecture) {
+      md += `
+## Architecture
+
+| Property | Value |
+|----------|-------|
+| Type | **${ARCHITECTURE_LABELS[architecture.type]}** |
+| Hydration | ${HYDRATION_LABELS[architecture.hydration]} |
+| Data Strategy | ${DATA_STRATEGY_LABELS[architecture.dataStrategy]} |
+| Client Router | ${architecture.hasClientRouter ? 'Yes' : 'No'} |
+| Server Components | ${architecture.hasServerComponents ? 'Yes' : 'No'} |
+| Streaming | ${architecture.supportsStreaming ? 'Yes' : 'No'} |
+
+`;
+    }
+
+    md += `## Bundle Sizes
 
 | Type | Raw | Gzip | Brotli |
 |------|-----|------|--------|
 | **Total** | ${formatByteSize(bundles.total.raw)} | ${formatByteSize(bundles.total.gzip)} | ${formatByteSize(bundles.total.brotli)} |
 | JavaScript | ${formatByteSize(bundles.javascript.raw)} | ${formatByteSize(bundles.javascript.gzip)} | ${formatByteSize(bundles.javascript.brotli)} |
 | CSS | ${formatByteSize(bundles.css.raw)} | ${formatByteSize(bundles.css.gzip)} | ${formatByteSize(bundles.css.brotli)} |
+
+`;
+
+    // Runtime breakdown (if available)
+    if (runtime) {
+      const categories = [
+        { name: 'Framework Core', ...runtime.framework },
+        { name: 'Router', ...runtime.router },
+        { name: 'Hydration', ...runtime.hydration },
+        { name: 'Polyfills', ...runtime.polyfills },
+        { name: 'Application', ...runtime.application },
+        { name: 'Other/Vendor', ...runtime.other },
+      ].filter(c => c.size.gzip > 0)
+       .sort((a, b) => b.size.gzip - a.size.gzip);
+
+      md += `## Runtime Breakdown
+
+| Category | Gzip | % of JS | Chunks |
+|----------|------|---------|--------|
+`;
+      for (const cat of categories) {
+        md += `| ${cat.name} | ${formatByteSize(cat.size.gzip)} | ${cat.percentage}% | ${cat.chunks.length} |\n`;
+      }
+      md += '\n';
+    } else {
+      // Fallback to simple vendor/app breakdown
+      md += `## JavaScript Breakdown
+
+| Category | Gzip | % of JS |
+|----------|------|---------|
+| Vendor/Framework | ${formatByteSize(bundles.vendor.gzip)} | ${vendorRatio}% |
+| Application Code | ${formatByteSize(bundles.nonVendor.gzip)} | ${appRatio}% |
+
+`;
+    }
+
+    // Route costs (if available)
+    if (routeCosts && routeCosts.routes.length > 0) {
+      md += `## Route Costs
+
+**Entry Point:** ${formatByteSize(routeCosts.entryPointCost.gzip)} (gzip)  
+**Average Route:** ${formatByteSize(routeCosts.averageRouteCost.gzip)} (gzip)
+
+| Route | Total | Unique | Shared |
+|-------|-------|--------|--------|
+`;
+      for (const route of routeCosts.routes.slice(0, 10)) {
+        const name = route.route.length > 25 ? `${route.route.slice(0, 22)}...` : route.route;
+        md += `| ${name} | ${formatByteSize(route.total.gzip)} | ${formatByteSize(route.unique.gzip)} | ${formatByteSize(route.shared.gzip)} |\n`;
+      }
+      if (routeCosts.routes.length > 10) {
+        md += `| ... and ${routeCosts.routes.length - 10} more | | | |\n`;
+      }
+      md += '\n';
+    }
+
+    md += `## Dependencies
+
+| Category | Count |
+|----------|-------|
+| Production | ${dependencies.dependencies} |
+| Dev | ${dependencies.devDependencies} |
+| **Total** | ${dependencies.total} |
+
+${dependencies.topDependencies.length > 0 ? `**Key dependencies:** ${dependencies.topDependencies.slice(0, 5).join(', ')}` : ''}
 
 ## Chunks (${bundles.chunks.length})
 

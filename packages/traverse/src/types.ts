@@ -143,16 +143,90 @@ export interface BundleAnalysis {
   readonly total: ByteSize;
   readonly javascript: ByteSize;
   readonly css: ByteSize;
+  readonly vendor: ByteSize;
+  readonly nonVendor: ByteSize;
   readonly entries: readonly EntryAnalysis[];
   readonly chunks: readonly ChunkAnalysis[];
   readonly duplicates: readonly DuplicateDependency[];
 }
 
+export interface DependencyCount {
+  readonly dependencies: number;
+  readonly devDependencies: number;
+  readonly total: number;
+  readonly topDependencies: readonly string[];
+}
+
+// Architecture classification types
+export type ArchitectureType = 'mpa' | 'spa' | 'transitional' | 'islands' | 'unknown';
+
+export type HydrationStrategy = 
+  | 'full'           // Traditional: hydrate entire page
+  | 'progressive'    // React 18+: selective/progressive hydration
+  | 'partial'        // Only hydrate interactive parts
+  | 'islands'        // Isolated island components
+  | 'resumable'      // Qwik-style: serialize state, no replay
+  | 'none';          // No hydration (pure MPA/SSG)
+
+export type DataStrategy =
+  | 'rsc'            // React Server Components
+  | 'loaders'        // Route loaders (Remix/RR7 style)
+  | 'getServerSideProps' // Next.js pages router
+  | 'client-fetch'   // Client-side data fetching
+  | 'static'         // Build-time data only
+  | 'mixed';         // Combination of strategies
+
+export interface ArchitectureAnalysis {
+  readonly type: ArchitectureType;
+  readonly hydration: HydrationStrategy;
+  readonly dataStrategy: DataStrategy;
+  readonly hasClientRouter: boolean;
+  readonly hasServerComponents: boolean;
+  readonly supportsStreaming: boolean;
+}
+
+// Runtime cost breakdown types
+export interface RuntimeCategory {
+  readonly name: string;
+  readonly size: ByteSize;
+  readonly percentage: number;
+  readonly chunks: readonly string[];
+}
+
+export interface RuntimeBreakdown {
+  readonly total: ByteSize;
+  readonly framework: RuntimeCategory;
+  readonly router: RuntimeCategory;
+  readonly hydration: RuntimeCategory;
+  readonly polyfills: RuntimeCategory;
+  readonly application: RuntimeCategory;
+  readonly other: RuntimeCategory;
+}
+
+// Route cost types
+export interface RouteCost {
+  readonly route: string;
+  readonly unique: ByteSize;
+  readonly shared: ByteSize;
+  readonly total: ByteSize;
+  readonly chunks: readonly string[];
+}
+
+export interface RouteCostAnalysis {
+  readonly routes: readonly RouteCost[];
+  readonly entryPointCost: ByteSize;
+  readonly averageRouteCost: ByteSize;
+}
+
 export interface StaticAnalysis {
   readonly meta: StaticAnalysisMeta;
   readonly bundles: BundleAnalysis;
+  readonly dependencies: DependencyCount;
   readonly routes: readonly RouteAnalysis[];
   readonly frameworkSpecific: NextJsAnalysis | null;
+  readonly architecture?: ArchitectureAnalysis;
+  readonly runtime?: RuntimeBreakdown;
+  readonly routeCosts?: RouteCostAnalysis;
 }
 
 // =============================================================================
@@ -199,16 +273,30 @@ export interface ExtendedMetrics {
   readonly hydration: AggregatedMetric | null;
 }
 
-export interface ResourceMetrics {
+export interface ResourceTypeMetrics {
   readonly count: AggregatedMetric;
-  readonly transferred: AggregatedMetric;
-  readonly fromCache: AggregatedMetric;
+  readonly transferSize: AggregatedMetric;
+  readonly decodedSize: AggregatedMetric;
 }
 
 export interface JavaScriptMetrics {
   readonly mainThreadBlocking: AggregatedMetric;
   readonly longTasks: AggregatedMetric;
   readonly heapSize: AggregatedMetric;
+}
+
+export type HydrationFramework = 'next' | 'react-router' | 'remix' | 'unknown' | null;
+
+export interface SsrMetrics {
+  readonly hasContent: AggregatedMetric;
+  readonly inlineScriptSize: AggregatedMetric;
+  readonly inlineScriptCount: AggregatedMetric;
+  readonly hydrationPayloadSize: AggregatedMetric;
+  readonly hydrationFramework: HydrationFramework;
+  readonly nextDataSize: AggregatedMetric | null;
+  readonly reactRouterDataSize: AggregatedMetric | null;
+  readonly rscPayloadSize: AggregatedMetric | null;
+  readonly rscChunkCount: AggregatedMetric | null;
 }
 
 export interface RuntimeRun {
@@ -234,6 +322,13 @@ export interface RuntimeRun {
     readonly domContentLoaded: number;
     readonly load: number;
   };
+  readonly ssr: {
+    readonly hasContent: boolean;
+    readonly inlineScriptSize: number;
+    readonly inlineScriptCount: number;
+    readonly hydrationPayloadSize: number;
+    readonly hydrationFramework: HydrationFramework;
+  };
 }
 
 export interface RuntimeBenchmark {
@@ -243,9 +338,10 @@ export interface RuntimeBenchmark {
   readonly resources: {
     readonly totalTransfer: AggregatedMetric;
     readonly totalCount: AggregatedMetric;
-    readonly byType: Partial<Record<ResourceType, ResourceMetrics>>;
+    readonly byType: Partial<Record<ResourceType, ResourceTypeMetrics>>;
   };
   readonly javascript: JavaScriptMetrics;
+  readonly ssr: SsrMetrics;
   readonly runs: readonly RuntimeRun[];
 }
 
@@ -374,6 +470,15 @@ export interface ReportCommand {
   readonly template: string | null;
 }
 
+export interface BuildCommand {
+  readonly command: 'build';
+  readonly projectDir: string;
+  readonly buildCmd: string | null;
+  readonly clearCache: boolean;
+  readonly output: string | null;
+  readonly format: OutputFormat;
+}
+
 export interface InitCommand {
   readonly command: 'init';
 }
@@ -397,6 +502,7 @@ export type Command =
   | JourneyCommand
   | AnalyzeCommand
   | CompareCommand
+  | BuildCommand
   | ReportCommand
   | InitCommand
   | ValidateCommand

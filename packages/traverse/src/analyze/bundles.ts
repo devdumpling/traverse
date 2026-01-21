@@ -4,8 +4,9 @@
  */
 
 import { gzipSync } from 'bun';
-import type { ByteSize, ChunkAnalysis, BundleAnalysis, Result } from '../types.ts';
+import type { ByteSize, ChunkAnalysis, BundleAnalysis, Result, FrameworkType } from '../types.ts';
 import { ok, err } from '../result.ts';
+import { parseManifest, isVendorOrFramework, type ChunkClassification } from './manifests.ts';
 
 export interface BundleError {
   readonly code: 'NO_BUILD_DIR' | 'ANALYSIS_FAILED';
@@ -17,12 +18,68 @@ interface FileInfo {
   readonly name: string;
   readonly content: Uint8Array;
   readonly type: 'js' | 'css' | 'other';
+  readonly isVendor: boolean;
 }
 
 const getFileType = (path: string): 'js' | 'css' | 'other' => {
   if (path.endsWith('.js') || path.endsWith('.mjs')) return 'js';
   if (path.endsWith('.css')) return 'css';
   return 'other';
+};
+
+/**
+ * Determine if a chunk is vendor code (from node_modules).
+ * Uses manifest data when available, falls back to heuristics.
+ */
+const isVendorChunkWithManifest = (
+  path: string,
+  name: string,
+  classification: ChunkClassification | null
+): boolean => {
+  // Use manifest classification when available
+  if (classification && isVendorOrFramework(name, classification)) {
+    return true;
+  }
+
+  // Fall back to heuristics
+  return isVendorChunkHeuristic(path, name);
+};
+
+/**
+ * Heuristic-based vendor detection.
+ * Used when manifest data is not available.
+ */
+const isVendorChunkHeuristic = (path: string, name: string): boolean => {
+  const lowerName = name.toLowerCase();
+  const lowerPath = path.toLowerCase();
+
+  // Explicit vendor patterns
+  if (lowerName.includes('vendor')) return true;
+  if (lowerName.includes('node_modules')) return true;
+
+  // Next.js patterns
+  // Framework chunks are vendor
+  if (lowerName.includes('framework-')) return true;
+  // Main and webpack chunks contain both, treat as non-vendor
+  if (lowerName.includes('main-') && !lowerName.includes('vendor')) return false;
+  // polyfills are vendor
+  if (lowerName.includes('polyfill')) return true;
+
+  // Chunks with only hash names (no meaningful prefix) in chunks/ are often vendor
+  // e.g., static/chunks/abc123.js vs static/chunks/app/page-abc123.js
+  if (lowerPath.includes('/chunks/') && !lowerPath.includes('/app/') && !lowerPath.includes('/pages/')) {
+    // Short hash-only names are typically vendor splits
+    const fileName = name.split('/').pop() ?? '';
+    const baseName = fileName.replace(/\.[^.]+$/, '');
+    // If it's just a hash (no descriptive prefix), likely vendor
+    if (/^[a-f0-9]+$/i.test(baseName)) return true;
+  }
+
+  // React Router / Vite patterns
+  if (lowerName.includes('react-') || lowerName.includes('react.')) return true;
+  if (lowerName.includes('scheduler')) return true;
+
+  return false;
 };
 
 const calculateByteSize = (content: Uint8Array): ByteSize => {
@@ -101,7 +158,10 @@ const isClientBundle = (path: string, buildDir: string): boolean => {
  * Read file info for all JS and CSS files in a directory.
  * Filters to only include client-side bundles.
  */
-const readBundleFiles = async (buildDir: string): Promise<FileInfo[]> => {
+const readBundleFiles = async (
+  buildDir: string,
+  classification: ChunkClassification | null
+): Promise<FileInfo[]> => {
   const files = await findFiles(buildDir, ['.js', '.mjs', '.css']);
   
   const fileInfos: FileInfo[] = [];
@@ -120,6 +180,7 @@ const readBundleFiles = async (buildDir: string): Promise<FileInfo[]> => {
         name,
         content,
         type: getFileType(path),
+        isVendor: isVendorChunkWithManifest(path, name, classification),
       });
     } catch {
       // Skip files that can't be read
@@ -129,15 +190,37 @@ const readBundleFiles = async (buildDir: string): Promise<FileInfo[]> => {
   return fileInfos;
 };
 
+export interface AnalyzeBundlesOptions {
+  readonly buildDir: string;
+  readonly framework?: FrameworkType;
+}
+
 /**
  * Analyze bundles in a build directory.
  * Returns size information for all JavaScript and CSS files.
+ * Uses manifest data when available for accurate vendor/framework classification.
  */
 export const analyzeBundles = async (
-  buildDir: string
+  buildDirOrOptions: string | AnalyzeBundlesOptions
 ): Promise<Result<BundleAnalysis, BundleError>> => {
+  const options = typeof buildDirOrOptions === 'string'
+    ? { buildDir: buildDirOrOptions }
+    : buildDirOrOptions;
+  
+  const { buildDir, framework } = options;
+
   try {
-    const files = await readBundleFiles(buildDir);
+    // Try to parse manifest for accurate chunk classification
+    let classification: ChunkClassification | null = null;
+    
+    if (framework) {
+      const manifestResult = await parseManifest(buildDir, framework);
+      if (manifestResult.ok) {
+        classification = manifestResult.value.classification;
+      }
+    }
+
+    const files = await readBundleFiles(buildDir, classification);
     
     if (files.length === 0) {
       return err({
@@ -148,6 +231,8 @@ export const analyzeBundles = async (
 
     const jsFiles = files.filter(f => f.type === 'js');
     const cssFiles = files.filter(f => f.type === 'css');
+    const vendorFiles = files.filter(f => f.isVendor && f.type === 'js');
+    const nonVendorFiles = files.filter(f => !f.isVendor && f.type === 'js');
 
     // Calculate sizes for each file
     const chunks: ChunkAnalysis[] = files.map(file => {
@@ -156,7 +241,7 @@ export const analyzeBundles = async (
         id: file.name,
         path: file.path,
         size,
-        shared: file.name.includes('chunk') || file.name.includes('vendor'),
+        shared: file.name.includes('chunk') || file.isVendor,
         loadedBy: [], // Would need manifest parsing to determine this
       };
     });
@@ -164,15 +249,21 @@ export const analyzeBundles = async (
     // Calculate totals
     const jsSizes = jsFiles.map(f => calculateByteSize(f.content));
     const cssSizes = cssFiles.map(f => calculateByteSize(f.content));
+    const vendorSizes = vendorFiles.map(f => calculateByteSize(f.content));
+    const nonVendorSizes = nonVendorFiles.map(f => calculateByteSize(f.content));
     
     const javascript = sumByteSizes(jsSizes);
     const css = sumByteSizes(cssSizes);
+    const vendor = sumByteSizes(vendorSizes);
+    const nonVendor = sumByteSizes(nonVendorSizes);
     const total = sumByteSizes([javascript, css]);
 
     return ok({
       total,
       javascript,
       css,
+      vendor,
+      nonVendor,
       entries: [], // Would need manifest parsing to determine entry points
       chunks,
       duplicates: [], // Would need source map analysis

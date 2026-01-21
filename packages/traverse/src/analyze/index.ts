@@ -3,11 +3,15 @@
  * Analyzes build outputs to extract bundle sizes, routes, and framework-specific data.
  */
 
-import type { Result, StaticAnalysis, RouteAnalysis } from '../types.ts';
+import type { Result, StaticAnalysis, RouteAnalysis, DependencyCount, ArchitectureAnalysis, RuntimeBreakdown, RouteCostAnalysis } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { detectFramework, type DetectionResult } from './detect.ts';
 import { analyzeBundles } from './bundles.ts';
 import { analyzeNextJs } from './nextjs.ts';
+import { analyzeDependencies } from './dependencies.ts';
+import { analyzeArchitecture } from './architecture.ts';
+import { analyzeRuntime } from './runtime.ts';
+import { analyzeRouteCosts } from './routes.ts';
 
 export interface AnalyzeError {
   readonly code: 'NO_SOURCE_DIR' | 'NO_BUILD_DIR' | 'ANALYSIS_FAILED';
@@ -45,14 +49,23 @@ export const analyze = async (
     });
   }
 
-  // Analyze bundles
-  const bundleResult = await analyzeBundles(buildDir);
+  // Analyze bundles with framework info for better vendor detection
+  const bundleResult = await analyzeBundles({
+    buildDir,
+    framework: detection.framework,
+  });
   if (!bundleResult.ok) {
     return err({
       code: 'ANALYSIS_FAILED',
       message: bundleResult.error.message,
     });
   }
+
+  // Analyze dependencies
+  const depsResult = await analyzeDependencies(options.sourceDir);
+  const dependencies: DependencyCount = depsResult.ok 
+    ? depsResult.value 
+    : { dependencies: 0, devDependencies: 0, total: 0, topDependencies: [] };
 
   // Framework-specific analysis
   let frameworkSpecific = null;
@@ -71,6 +84,52 @@ export const analyze = async (
     }
   }
 
+  // Architecture analysis
+  let architecture: ArchitectureAnalysis | undefined;
+  const archResult = await analyzeArchitecture(buildDir, detection.framework, bundleResult.value.chunks.map(c => c.id));
+  if (archResult.ok) {
+    architecture = {
+      type: archResult.value.type,
+      hydration: archResult.value.hydration,
+      dataStrategy: archResult.value.dataStrategy,
+      hasClientRouter: archResult.value.hasClientRouter,
+      hasServerComponents: archResult.value.hasServerComponents,
+      supportsStreaming: archResult.value.supportsStreaming,
+    };
+  }
+
+  // Runtime breakdown
+  let runtime: RuntimeBreakdown | undefined;
+  const runtimeResult = await analyzeRuntime(buildDir, detection.framework);
+  if (runtimeResult.ok) {
+    runtime = {
+      total: runtimeResult.value.total,
+      framework: runtimeResult.value.categories.framework,
+      router: runtimeResult.value.categories.router,
+      hydration: runtimeResult.value.categories.hydration,
+      polyfills: runtimeResult.value.categories.polyfills,
+      application: runtimeResult.value.categories.application,
+      other: runtimeResult.value.categories.other,
+    };
+  }
+
+  // Route cost analysis
+  let routeCosts: RouteCostAnalysis | undefined;
+  const routeCostResult = await analyzeRouteCosts(buildDir, detection.framework);
+  if (routeCostResult.ok) {
+    routeCosts = {
+      routes: routeCostResult.value.routes.map(r => ({
+        route: r.route,
+        unique: r.unique,
+        shared: r.shared,
+        total: r.total,
+        chunks: r.chunks,
+      })),
+      entryPointCost: routeCostResult.value.entryPointCost,
+      averageRouteCost: routeCostResult.value.averageRouteCost,
+    };
+  }
+
   return ok({
     meta: {
       analyzedAt: new Date().toISOString(),
@@ -80,8 +139,12 @@ export const analyze = async (
       buildDir,
     },
     bundles: bundleResult.value,
+    dependencies,
     routes,
     frameworkSpecific,
+    architecture,
+    runtime,
+    routeCosts,
   });
 };
 
@@ -89,3 +152,9 @@ export const analyze = async (
 export { detectFramework } from './detect.ts';
 export { analyzeBundles, formatByteSize } from './bundles.ts';
 export { analyzeNextJs } from './nextjs.ts';
+export { analyzeDependencies } from './dependencies.ts';
+export { parseManifest, parseNextJsManifest, parseViteManifest } from './manifests.ts';
+export { analyzeArchitecture, describeArchitecture, describeHydration } from './architecture.ts';
+export { analyzeRuntime, formatRuntimeBreakdown } from './runtime.ts';
+export { analyzeRouteCosts, formatRouteCosts } from './routes.ts';
+export { formatBytes, sumByteSizes, emptyByteSize } from './utils.ts';

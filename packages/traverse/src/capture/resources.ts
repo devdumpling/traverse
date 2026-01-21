@@ -18,6 +18,12 @@ export interface ResourceEntry {
   readonly cacheStatus: ResourceCacheStatus;
 }
 
+export interface ResourceTypeBreakdown {
+  readonly count: number;
+  readonly transferSize: number;
+  readonly decodedSize: number;
+}
+
 export interface ResourceCapture {
   readonly entries: readonly ResourceEntry[];
   readonly document: {
@@ -27,6 +33,15 @@ export interface ResourceCapture {
   readonly totalTransfer: number;
   readonly totalCount: number;
   readonly fromCache: number;
+  readonly byType: {
+    readonly script: ResourceTypeBreakdown;
+    readonly stylesheet: ResourceTypeBreakdown;
+    readonly image: ResourceTypeBreakdown;
+    readonly font: ResourceTypeBreakdown;
+    readonly fetch: ResourceTypeBreakdown;
+    readonly document: ResourceTypeBreakdown;
+    readonly other: ResourceTypeBreakdown;
+  };
 }
 
 interface RawResourceEntry {
@@ -129,11 +144,36 @@ export const captureResources = async (
   const totalTransfer = resourceTransfer + document.transferSize;
   const fromCache = entries.filter((e) => e.cacheStatus !== 'network').length;
 
+  // Calculate breakdown by type
+  const emptyBreakdown = (): ResourceTypeBreakdown => ({ count: 0, transferSize: 0, decodedSize: 0 });
+  
+  const byType = {
+    script: emptyBreakdown(),
+    stylesheet: emptyBreakdown(),
+    image: emptyBreakdown(),
+    font: emptyBreakdown(),
+    fetch: emptyBreakdown(),
+    document: { count: 1, transferSize: document.transferSize, decodedSize: document.decodedBodySize },
+    other: emptyBreakdown(),
+  };
+
+  for (const entry of entries) {
+    const breakdown = byType[entry.type];
+    if (breakdown) {
+      byType[entry.type] = {
+        count: breakdown.count + 1,
+        transferSize: breakdown.transferSize + entry.transferSize,
+        decodedSize: breakdown.decodedSize + entry.decodedBodySize,
+      };
+    }
+  }
+
   return ok({
     entries,
     document,
     totalTransfer,
     totalCount: entries.length + 1, // +1 for document
     fromCache,
+    byType,
   });
 };

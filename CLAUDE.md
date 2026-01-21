@@ -122,9 +122,32 @@ Use Bun APIs:
 
 ## Key Files
 
-- `traverse-spec.md` — Full project specification
-- `src/types.ts` — Core type definitions (start here)
-- `src/cli.ts` — CLI entry point
+- `docs/spec.md` — Full project specification
+- `docs/roadmap.md` — Implementation roadmap with progress
+- `packages/traverse/src/types.ts` — Core type definitions (start here)
+- `packages/traverse/src/cli/index.ts` — CLI entry point
+
+## Project Structure
+
+```
+traverse/
+├── packages/
+│   └── traverse/           # Main CLI package
+│       ├── src/
+│       │   ├── cli/        # CLI commands (bench, journey, analyze, validate)
+│       │   ├── bench/      # Single-page benchmark runner
+│       │   ├── journey/    # Multi-step journey runner
+│       │   ├── analyze/    # Static bundle analysis
+│       │   ├── capture/    # CWV and resource capture
+│       │   ├── browser/    # Playwright + CDP integration
+│       │   ├── config/     # Device/network presets
+│       │   ├── types.ts    # Core type definitions
+│       │   └── result.ts   # Result<T,E> utilities
+│       └── journeys/       # Test journey files
+└── docs/
+    ├── spec.md             # Full specification
+    └── roadmap.md          # Implementation roadmap
+```
 
 ### Workflow
 
