@@ -5,6 +5,7 @@
 
 import type { AnalyzeCommand, StaticAnalysis, ArchitectureType, HydrationStrategy, DataStrategy } from '../../types.ts';
 import { analyze, formatByteSize } from '../../analyze/index.ts';
+import { formatTable } from '../format.ts';
 
 const ARCHITECTURE_LABELS: Record<ArchitectureType, string> = {
   mpa: 'Multi-Page App',
@@ -61,28 +62,36 @@ const formatOutput = (
 
     // Architecture section (if available)
     if (architecture) {
+      const archTable = formatTable(
+        ['Property', 'Value'],
+        [
+          ['Type', `**${ARCHITECTURE_LABELS[architecture.type]}**`],
+          ['Hydration', HYDRATION_LABELS[architecture.hydration]],
+          ['Data Strategy', DATA_STRATEGY_LABELS[architecture.dataStrategy]],
+          ['Client Router', architecture.hasClientRouter ? 'Yes' : 'No'],
+          ['Server Components', architecture.hasServerComponents ? 'Yes' : 'No'],
+          ['Streaming', architecture.supportsStreaming ? 'Yes' : 'No'],
+        ]
+      );
       md += `
 ## Architecture
 
-| Property | Value |
-|----------|-------|
-| Type | **${ARCHITECTURE_LABELS[architecture.type]}** |
-| Hydration | ${HYDRATION_LABELS[architecture.hydration]} |
-| Data Strategy | ${DATA_STRATEGY_LABELS[architecture.dataStrategy]} |
-| Client Router | ${architecture.hasClientRouter ? 'Yes' : 'No'} |
-| Server Components | ${architecture.hasServerComponents ? 'Yes' : 'No'} |
-| Streaming | ${architecture.supportsStreaming ? 'Yes' : 'No'} |
+${archTable}
 
 `;
     }
 
+    const bundleTable = formatTable(
+      ['Type', 'Raw', 'Gzip', 'Brotli'],
+      [
+        ['**Total**', formatByteSize(bundles.total.raw), formatByteSize(bundles.total.gzip), formatByteSize(bundles.total.brotli)],
+        ['JavaScript', formatByteSize(bundles.javascript.raw), formatByteSize(bundles.javascript.gzip), formatByteSize(bundles.javascript.brotli)],
+        ['CSS', formatByteSize(bundles.css.raw), formatByteSize(bundles.css.gzip), formatByteSize(bundles.css.brotli)],
+      ]
+    );
     md += `## Bundle Sizes
 
-| Type | Raw | Gzip | Brotli |
-|------|-----|------|--------|
-| **Total** | ${formatByteSize(bundles.total.raw)} | ${formatByteSize(bundles.total.gzip)} | ${formatByteSize(bundles.total.brotli)} |
-| JavaScript | ${formatByteSize(bundles.javascript.raw)} | ${formatByteSize(bundles.javascript.gzip)} | ${formatByteSize(bundles.javascript.brotli)} |
-| CSS | ${formatByteSize(bundles.css.raw)} | ${formatByteSize(bundles.css.gzip)} | ${formatByteSize(bundles.css.brotli)} |
+${bundleTable}
 
 `;
 
@@ -98,61 +107,65 @@ const formatOutput = (
       ].filter(c => c.size.gzip > 0)
        .sort((a, b) => b.size.gzip - a.size.gzip);
 
+      const runtimeTable = formatTable(
+        ['Category', 'Gzip', '% of JS', 'Chunks'],
+        categories.map(cat => [cat.name, formatByteSize(cat.size.gzip), `${cat.percentage}%`, String(cat.chunks.length)])
+      );
       md += `## Runtime Breakdown
 
-| Category | Gzip | % of JS | Chunks |
-|----------|------|---------|--------|
+${runtimeTable}
+
 `;
-      for (const cat of categories) {
-        md += `| ${cat.name} | ${formatByteSize(cat.size.gzip)} | ${cat.percentage}% | ${cat.chunks.length} |\n`;
-      }
-      md += '\n';
     } else {
       // Fallback to simple vendor/app breakdown
+      const jsTable = formatTable(
+        ['Category', 'Gzip', '% of JS'],
+        [
+          ['Vendor/Framework', formatByteSize(bundles.vendor.gzip), `${vendorRatio}%`],
+          ['Application Code', formatByteSize(bundles.nonVendor.gzip), `${appRatio}%`],
+        ]
+      );
       md += `## JavaScript Breakdown
 
-| Category | Gzip | % of JS |
-|----------|------|---------|
-| Vendor/Framework | ${formatByteSize(bundles.vendor.gzip)} | ${vendorRatio}% |
-| Application Code | ${formatByteSize(bundles.nonVendor.gzip)} | ${appRatio}% |
+${jsTable}
 
 `;
     }
 
     // Route costs (if available)
     if (routeCosts && routeCosts.routes.length > 0) {
+      const routeRows: string[][] = routeCosts.routes.slice(0, 10).map(route => {
+        const name = route.route.length > 25 ? `${route.route.slice(0, 22)}...` : route.route;
+        return [name, formatByteSize(route.total.gzip), formatByteSize(route.unique.gzip), formatByteSize(route.shared.gzip)];
+      });
+      if (routeCosts.routes.length > 10) {
+        routeRows.push([`... and ${routeCosts.routes.length - 10} more`, '', '', '']);
+      }
+      const routeCostTable = formatTable(['Route', 'Total', 'Unique', 'Shared'], routeRows);
       md += `## Route Costs
 
 **Entry Point:** ${formatByteSize(routeCosts.entryPointCost.gzip)} (gzip)  
 **Average Route:** ${formatByteSize(routeCosts.averageRouteCost.gzip)} (gzip)
 
-| Route | Total | Unique | Shared |
-|-------|-------|--------|--------|
+${routeCostTable}
+
 `;
-      for (const route of routeCosts.routes.slice(0, 10)) {
-        const name = route.route.length > 25 ? `${route.route.slice(0, 22)}...` : route.route;
-        md += `| ${name} | ${formatByteSize(route.total.gzip)} | ${formatByteSize(route.unique.gzip)} | ${formatByteSize(route.shared.gzip)} |\n`;
-      }
-      if (routeCosts.routes.length > 10) {
-        md += `| ... and ${routeCosts.routes.length - 10} more | | | |\n`;
-      }
-      md += '\n';
     }
 
+    const depsTable = formatTable(
+      ['Category', 'Count'],
+      [
+        ['Production', String(dependencies.dependencies)],
+        ['Dev', String(dependencies.devDependencies)],
+        ['**Total**', String(dependencies.total)],
+      ]
+    );
     md += `## Dependencies
 
-| Category | Count |
-|----------|-------|
-| Production | ${dependencies.dependencies} |
-| Dev | ${dependencies.devDependencies} |
-| **Total** | ${dependencies.total} |
+${depsTable}
 
 ${dependencies.topDependencies.length > 0 ? `**Key dependencies:** ${dependencies.topDependencies.slice(0, 5).join(', ')}` : ''}
 
-## Chunks (${bundles.chunks.length})
-
-| Chunk | Raw | Gzip |
-|-------|-----|------|
 `;
 
     // Sort chunks by size descending, show top 10
@@ -160,37 +173,45 @@ ${dependencies.topDependencies.length > 0 ? `**Key dependencies:** ${dependencie
       .sort((a, b) => b.size.raw - a.size.raw)
       .slice(0, 10);
     
-    for (const chunk of sortedChunks) {
+    const chunkRows: string[][] = sortedChunks.map(chunk => {
       const name = chunk.id.length > 40 ? `...${chunk.id.slice(-37)}` : chunk.id;
-      md += `| ${name} | ${formatByteSize(chunk.size.raw)} | ${formatByteSize(chunk.size.gzip)} |\n`;
-    }
-    
+      return [name, formatByteSize(chunk.size.raw), formatByteSize(chunk.size.gzip)];
+    });
     if (bundles.chunks.length > 10) {
-      md += `| ... and ${bundles.chunks.length - 10} more | | |\n`;
+      chunkRows.push([`... and ${bundles.chunks.length - 10} more`, '', '']);
     }
+    const chunksTable = formatTable(['Chunk', 'Raw', 'Gzip'], chunkRows);
+    md += `## Chunks (${bundles.chunks.length})
+
+${chunksTable}
+`;
 
     if (routes.length > 0) {
+      const routesTable = formatTable(
+        ['Route', 'Type'],
+        routes.map(route => [route.path, route.type])
+      );
       md += `
 ## Routes (${routes.length})
 
-| Route | Type |
-|-------|------|
+${routesTable}
 `;
-      for (const route of routes) {
-        md += `| ${route.path} | ${route.type} |\n`;
-      }
     }
 
     if (frameworkSpecific && meta.framework === 'nextjs') {
       const nextjs = frameworkSpecific;
+      const nextTable = formatTable(
+        ['Property', 'Value'],
+        [
+          ['Router Type', nextjs.routerType],
+          ['Middleware', nextjs.hasMiddleware ? 'Yes' : 'No'],
+          ['Turbopack', nextjs.turbopack ? 'Yes' : 'No'],
+        ]
+      );
       md += `
 ## Next.js Details
 
-| Property | Value |
-|----------|-------|
-| Router Type | ${nextjs.routerType} |
-| Middleware | ${nextjs.hasMiddleware ? 'Yes' : 'No'} |
-| Turbopack | ${nextjs.turbopack ? 'Yes' : 'No'} |
+${nextTable}
 `;
     }
 

@@ -11,14 +11,7 @@ import {
   type ComparisonResult,
   type AggregatedMetricDiff,
 } from '../../compare/index.ts';
-
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-};
-
-const formatMs = (ms: number): string => `${ms.toFixed(0)}ms`;
+import { formatTable, formatBytes, formatMs } from '../format.ts';
 
 const formatDiff = (diff: AggregatedMetricDiff, formatter: (n: number) => string): string => {
   const sign = diff.median.absoluteDiff >= 0 ? '+' : '-';
@@ -33,7 +26,7 @@ const formatBenchmarkComparison = (result: BenchmarkComparison): string => {
   const b = result.baseline.data as RuntimeBenchmark;
   const c = result.current.data as RuntimeBenchmark;
 
-  const rows = [
+  const rows: string[][] = [
     ['LCP', formatMs(b.cwv.lcp.median), formatMs(c.cwv.lcp.median), formatDiff(result.cwv.lcp, formatMs)],
     ['FCP', formatMs(b.cwv.fcp.median), formatMs(c.cwv.fcp.median), formatDiff(result.cwv.fcp, formatMs)],
     ['CLS', b.cwv.cls.median.toFixed(3), c.cwv.cls.median.toFixed(3), formatDiff(result.cwv.cls, n => n.toFixed(3))],
@@ -59,9 +52,7 @@ const formatBenchmarkComparison = (result: BenchmarkComparison): string => {
     }
   }
 
-  const table = rows.map(([metric, base, curr, diff]) => 
-    `| ${metric} | ${base} | ${curr} | ${diff} |`
-  ).join('\n');
+  const table = formatTable(['Metric', 'Baseline', 'Current', 'Change'], rows);
 
   return `# Benchmark Comparison
 
@@ -70,8 +61,6 @@ const formatBenchmarkComparison = (result: BenchmarkComparison): string => {
 
 ## Metrics Comparison
 
-| Metric | Baseline | Current | Change |
-|--------|----------|---------|--------|
 ${table}
 
 ### Legend
@@ -82,14 +71,29 @@ ${table}
 };
 
 const formatStaticComparison = (result: StaticComparison): string => {
-  const formatBundleRow = (
-    label: string,
+  const formatBundleChange = (
     data: { baseline: number; current: number; diff: number; percent: number }
-  ) => {
+  ): string => {
     const sign = data.diff >= 0 ? '+' : '';
     const indicator = Math.abs(data.percent) < 1 ? '~' : data.diff < 0 ? '++' : '--';
-    return `| ${label} | ${formatBytes(data.baseline)} | ${formatBytes(data.current)} | ${sign}${formatBytes(Math.abs(data.diff))} (${sign}${data.percent.toFixed(1)}%) ${indicator} |`;
+    return `${sign}${formatBytes(Math.abs(data.diff))} (${sign}${data.percent.toFixed(1)}%) ${indicator}`;
   };
+
+  const bundleRows: string[][] = [
+    ['Total (raw)', formatBytes(result.bundles.totalRaw.baseline), formatBytes(result.bundles.totalRaw.current), formatBundleChange(result.bundles.totalRaw)],
+    ['Total (gzip)', formatBytes(result.bundles.totalGzip.baseline), formatBytes(result.bundles.totalGzip.current), formatBundleChange(result.bundles.totalGzip)],
+    ['JS (raw)', formatBytes(result.bundles.jsRaw.baseline), formatBytes(result.bundles.jsRaw.current), formatBundleChange(result.bundles.jsRaw)],
+    ['JS (gzip)', formatBytes(result.bundles.jsGzip.baseline), formatBytes(result.bundles.jsGzip.current), formatBundleChange(result.bundles.jsGzip)],
+    ['CSS (raw)', formatBytes(result.bundles.cssRaw.baseline), formatBytes(result.bundles.cssRaw.current), formatBundleChange(result.bundles.cssRaw)],
+    ['CSS (gzip)', formatBytes(result.bundles.cssGzip.baseline), formatBytes(result.bundles.cssGzip.current), formatBundleChange(result.bundles.cssGzip)],
+  ];
+
+  const bundleTable = formatTable(['Metric', 'Baseline', 'Current', 'Change'], bundleRows);
+
+  const routesTable = formatTable(
+    ['', 'Baseline', 'Current'],
+    [['Route Count', String(result.routes.baselineCount), String(result.routes.currentCount)]]
+  );
 
   return `# Static Analysis Comparison
 
@@ -98,20 +102,11 @@ const formatStaticComparison = (result: StaticComparison): string => {
 
 ## Bundle Size Comparison
 
-| Metric | Baseline | Current | Change |
-|--------|----------|---------|--------|
-${formatBundleRow('Total (raw)', result.bundles.totalRaw)}
-${formatBundleRow('Total (gzip)', result.bundles.totalGzip)}
-${formatBundleRow('JS (raw)', result.bundles.jsRaw)}
-${formatBundleRow('JS (gzip)', result.bundles.jsGzip)}
-${formatBundleRow('CSS (raw)', result.bundles.cssRaw)}
-${formatBundleRow('CSS (gzip)', result.bundles.cssGzip)}
+${bundleTable}
 
 ## Routes
 
-| | Baseline | Current |
-|--|----------|---------|
-| Route Count | ${result.routes.baselineCount} | ${result.routes.currentCount} |
+${routesTable}
 
 ### Legend
 - **++** = Improved (smaller size)

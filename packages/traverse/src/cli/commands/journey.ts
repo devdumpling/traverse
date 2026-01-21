@@ -5,14 +5,7 @@
 import type { JourneyCommand, JourneyResult } from '../../types.ts';
 import { runJourney, loadJourney } from '../../journey/index.ts';
 import { getDeviceConfig } from '../../config/index.ts';
-
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-};
-
-const formatMs = (ms: number): string => `${ms.toFixed(0)}ms`;
+import { formatTable, formatBytes, formatMs } from '../format.ts';
 
 const formatOutput = (result: JourneyResult, format: 'json' | 'markdown' | 'html'): string => {
   if (format === 'json') {
@@ -20,7 +13,31 @@ const formatOutput = (result: JourneyResult, format: 'json' | 'markdown' | 'html
   }
 
   if (format === 'markdown') {
-    let md = `# Journey: ${result.meta.name}
+    const stepRows = result.steps.map(step => [
+      step.name,
+      formatMs(step.navigation.duration.median),
+      step.navigation.type,
+      step.cwv.lcp ? formatMs(step.cwv.lcp.median) : '-',
+      step.cwv.cls.median.toFixed(3),
+      step.resources.loaded.median.toFixed(0),
+    ]);
+    const stepsTable = formatTable(
+      ['Step', 'Duration', 'Nav Type', 'LCP', 'CLS', 'Resources'],
+      stepRows
+    );
+
+    const cumulativeTable = formatTable(
+      ['Metric', 'Value'],
+      [
+        ['Total Duration', formatMs(result.cumulative.totalDuration.median)],
+        ['Total Transferred', formatBytes(result.cumulative.totalTransferred.median)],
+        ['Cache Hit Rate', `${result.cumulative.cacheHitRate.median.toFixed(1)}%`],
+        ['Memory High Water', formatBytes(result.cumulative.memoryHighWater.median)],
+        ['Total CLS', result.cumulative.totalCls.median.toFixed(3)],
+      ]
+    );
+
+    return `# Journey: ${result.meta.name}
 
 ${result.meta.description}
 
@@ -30,30 +47,12 @@ ${result.meta.description}
 
 ## Steps
 
-| Step | Duration | Nav Type | LCP | CLS | Resources |
-|------|----------|----------|-----|-----|-----------|
-`;
+${stepsTable}
 
-    for (const step of result.steps) {
-      const lcp = step.cwv.lcp ? formatMs(step.cwv.lcp.median) : '-';
-      const cls = step.cwv.cls.median.toFixed(3);
-      const resources = step.resources.loaded.median.toFixed(0);
-      md += `| ${step.name} | ${formatMs(step.navigation.duration.median)} | ${step.navigation.type} | ${lcp} | ${cls} | ${resources} |\n`;
-    }
-
-    md += `
 ## Cumulative Metrics
 
-| Metric | Value |
-|--------|-------|
-| Total Duration | ${formatMs(result.cumulative.totalDuration.median)} |
-| Total Transferred | ${formatBytes(result.cumulative.totalTransferred.median)} |
-| Cache Hit Rate | ${result.cumulative.cacheHitRate.median.toFixed(1)}% |
-| Memory High Water | ${formatBytes(result.cumulative.memoryHighWater.median)} |
-| Total CLS | ${result.cumulative.totalCls.median.toFixed(3)} |
+${cumulativeTable}
 `;
-
-    return md;
   }
 
   // HTML format

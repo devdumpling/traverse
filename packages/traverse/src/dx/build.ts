@@ -81,6 +81,19 @@ const detectBuildConfig = async (
 };
 
 /**
+ * Check if a path exists (file or directory).
+ */
+const pathExists = async (path: string): Promise<boolean> => {
+  try {
+    const { stat } = await import('fs/promises');
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Clear build caches for a project.
  */
 const clearCaches = async (projectDir: string, cacheDirs: readonly string[]): Promise<boolean> => {
@@ -89,7 +102,7 @@ const clearCaches = async (projectDir: string, cacheDirs: readonly string[]): Pr
   for (const dir of cacheDirs) {
     const fullPath = `${projectDir}/${dir}`;
     try {
-      const exists = await Bun.file(fullPath).exists();
+      const exists = await pathExists(fullPath);
       if (exists) {
         // Use rm -rf via shell since Bun doesn't have recursive delete
         const proc = Bun.spawn(['rm', '-rf', fullPath], {
