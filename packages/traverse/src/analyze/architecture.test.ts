@@ -16,11 +16,11 @@ describe('architecture', () => {
 
   describe('analyzeArchitecture', () => {
     test('detects Next.js App Router as transitional', async () => {
-      // Create mock Next.js build structure
-      await mkdir(join(TEST_DIR, 'nextjs-app'), { recursive: true });
+      // Create mock Next.js 16 build structure (manifests in server/)
+      await mkdir(join(TEST_DIR, 'nextjs-app', 'server'), { recursive: true });
       await writeFile(
-        join(TEST_DIR, 'nextjs-app', 'app-paths-manifest.json'),
-        JSON.stringify({ '/': 'app/page.js' })
+        join(TEST_DIR, 'nextjs-app', 'server', 'app-paths-manifest.json'),
+        JSON.stringify({ '/page': 'app/page.js', '/products/page': 'app/products/page.js' })
       );
       await writeFile(
         join(TEST_DIR, 'nextjs-app', 'build-manifest.json'),

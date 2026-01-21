@@ -1,5 +1,10 @@
 /**
  * Tests for framework detection.
+ * 
+ * These tests require the example apps to be built:
+ *   cd packages/examples/apps/basic-next-app && npm run build
+ *   cd packages/examples/apps/basic-rr-app && npm run build
+ *   cd packages/examples/apps/basic-react && npm run build
  */
 
 import { describe, test, expect } from 'bun:test';

@@ -1,5 +1,7 @@
 /**
  * Tests for Next.js specific analysis.
+ * 
+ * Requires: cd packages/examples/apps/basic-next-app && npm i && npm run build
  */
 
 import { describe, test, expect } from 'bun:test';
