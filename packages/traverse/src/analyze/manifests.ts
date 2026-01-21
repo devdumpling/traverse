@@ -9,6 +9,7 @@
 
 import type { Result, FrameworkType } from '../types.ts';
 import { ok, err } from '../result.ts';
+import { readJson } from './utils.ts';
 
 export interface ManifestError {
   readonly code: 'NOT_FOUND' | 'PARSE_ERROR';
@@ -52,29 +53,6 @@ interface ViteManifest {
     readonly css?: readonly string[];
   };
 }
-
-// React Router manifest structure (embedded in HTML or .vite/manifest.json)
-interface ReactRouterManifest {
-  readonly entry: {
-    readonly module: string;
-    readonly imports: readonly string[];
-  };
-  readonly routes: Record<string, {
-    readonly id: string;
-    readonly path?: string;
-    readonly module: string;
-    readonly imports?: readonly string[];
-  }>;
-}
-
-const readJson = async <T>(path: string): Promise<T | null> => {
-  try {
-    const content = await Bun.file(path).text();
-    return JSON.parse(content) as T;
-  } catch {
-    return null;
-  }
-};
 
 const isFrameworkChunk = (chunkPath: string): boolean => {
   const lower = chunkPath.toLowerCase();

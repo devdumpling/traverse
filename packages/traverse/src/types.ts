@@ -157,12 +157,76 @@ export interface DependencyCount {
   readonly topDependencies: readonly string[];
 }
 
+// Architecture classification types
+export type ArchitectureType = 'mpa' | 'spa' | 'transitional' | 'islands' | 'unknown';
+
+export type HydrationStrategy = 
+  | 'full'           // Traditional: hydrate entire page
+  | 'progressive'    // React 18+: selective/progressive hydration
+  | 'partial'        // Only hydrate interactive parts
+  | 'islands'        // Isolated island components
+  | 'resumable'      // Qwik-style: serialize state, no replay
+  | 'none';          // No hydration (pure MPA/SSG)
+
+export type DataStrategy =
+  | 'rsc'            // React Server Components
+  | 'loaders'        // Route loaders (Remix/RR7 style)
+  | 'getServerSideProps' // Next.js pages router
+  | 'client-fetch'   // Client-side data fetching
+  | 'static'         // Build-time data only
+  | 'mixed';         // Combination of strategies
+
+export interface ArchitectureAnalysis {
+  readonly type: ArchitectureType;
+  readonly hydration: HydrationStrategy;
+  readonly dataStrategy: DataStrategy;
+  readonly hasClientRouter: boolean;
+  readonly hasServerComponents: boolean;
+  readonly supportsStreaming: boolean;
+}
+
+// Runtime cost breakdown types
+export interface RuntimeCategory {
+  readonly name: string;
+  readonly size: ByteSize;
+  readonly percentage: number;
+  readonly chunks: readonly string[];
+}
+
+export interface RuntimeBreakdown {
+  readonly total: ByteSize;
+  readonly framework: RuntimeCategory;
+  readonly router: RuntimeCategory;
+  readonly hydration: RuntimeCategory;
+  readonly polyfills: RuntimeCategory;
+  readonly application: RuntimeCategory;
+  readonly other: RuntimeCategory;
+}
+
+// Route cost types
+export interface RouteCost {
+  readonly route: string;
+  readonly unique: ByteSize;
+  readonly shared: ByteSize;
+  readonly total: ByteSize;
+  readonly chunks: readonly string[];
+}
+
+export interface RouteCostAnalysis {
+  readonly routes: readonly RouteCost[];
+  readonly entryPointCost: ByteSize;
+  readonly averageRouteCost: ByteSize;
+}
+
 export interface StaticAnalysis {
   readonly meta: StaticAnalysisMeta;
   readonly bundles: BundleAnalysis;
   readonly dependencies: DependencyCount;
   readonly routes: readonly RouteAnalysis[];
   readonly frameworkSpecific: NextJsAnalysis | null;
+  readonly architecture?: ArchitectureAnalysis;
+  readonly runtime?: RuntimeBreakdown;
+  readonly routeCosts?: RouteCostAnalysis;
 }
 
 // =============================================================================

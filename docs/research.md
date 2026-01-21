@@ -1,4 +1,6 @@
-# Next.js 16 App Router vs React Router 7: Deep technical comparison
+# Next.js 16.1 App Router vs React Router 7.12: Deep technical comparison
+
+> **Latest versions as of January 2026**: Next.js 16.1.4, React Router 7.12.0
 
 These two frameworks take fundamentally different approaches to full-stack React: **Next.js 16** fully embraces React Server Components with Flight protocol as the native data format, while **React Router 7** uses traditional SSR with turbo-stream serialization, offering RSC only as experimental. This distinction cascades through every aspect of their architecture, from build outputs to client navigation.
 
