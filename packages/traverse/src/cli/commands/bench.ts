@@ -5,14 +5,7 @@
 import type { BenchCommand, RuntimeBenchmark, ResourceType } from '../../types.ts';
 import { runBenchmark } from '../../bench/index.ts';
 import { getDeviceConfig, getNetworkConfig } from '../../config/index.ts';
-
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-};
-
-const formatMs = (ms: number): string => `${ms.toFixed(0)}ms`;
+import { formatTable, formatBytes, formatMs } from '../format.ts';
 
 const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   script: 'JavaScript',
@@ -31,16 +24,18 @@ const formatResourcesByType = (result: RuntimeBenchmark): string => {
 
   const rows = types
     .sort(([, a], [, b]) => b.transferSize.median - a.transferSize.median)
-    .map(([type, metrics]) => 
-      `| ${RESOURCE_TYPE_LABELS[type]} | ${metrics.count.median.toFixed(0)} | ${formatBytes(metrics.transferSize.median)} | ${formatBytes(metrics.decodedSize.median)} |`
-    )
-    .join('\n');
+    .map(([type, metrics]) => [
+      RESOURCE_TYPE_LABELS[type],
+      metrics.count.median.toFixed(0),
+      formatBytes(metrics.transferSize.median),
+      formatBytes(metrics.decodedSize.median),
+    ]);
+
+  const table = formatTable(['Type', 'Count', 'Transfer', 'Decoded'], rows);
 
   return `## Resources by Type
 
-| Type | Count | Transfer | Decoded |
-|------|-------|----------|---------|
-${rows}
+${table}
 
 `;
 };
@@ -51,22 +46,64 @@ const formatOutput = (result: RuntimeBenchmark, format: 'json' | 'markdown' | 'h
   }
 
   if (format === 'markdown') {
-    const ssrSection = result.ssr.hydrationFramework 
-      ? `## SSR & Hydration
+    // SSR section
+    let ssrSection = '';
+    if (result.ssr.hydrationFramework) {
+      const ssrRows: string[][] = [
+        ['Framework', result.ssr.hydrationFramework],
+        ['Has SSR Content', result.ssr.hasContent.median > 0.5 ? 'Yes' : 'No'],
+        ['Inline Script Size', formatBytes(result.ssr.inlineScriptSize.median)],
+        ['Inline Script Count', result.ssr.inlineScriptCount.median.toFixed(0)],
+        ['Hydration Payload', formatBytes(result.ssr.hydrationPayloadSize.median)],
+      ];
+      if (result.ssr.rscPayloadSize) {
+        ssrRows.push(['RSC Payload', formatBytes(result.ssr.rscPayloadSize.median)]);
+      }
+      if (result.ssr.nextDataSize) {
+        ssrRows.push(['__NEXT_DATA__ Size', formatBytes(result.ssr.nextDataSize.median)]);
+      }
+      if (result.ssr.reactRouterDataSize) {
+        ssrRows.push(['React Router Data', formatBytes(result.ssr.reactRouterDataSize.median)]);
+      }
+      const ssrTable = formatTable(['Metric', 'Median'], ssrRows);
+      ssrSection = `## SSR & Hydration
 
-| Metric | Median |
-|--------|--------|
-| Framework | ${result.ssr.hydrationFramework} |
-| Has SSR Content | ${result.ssr.hasContent.median > 0.5 ? 'Yes' : 'No'} |
-| Inline Script Size | ${formatBytes(result.ssr.inlineScriptSize.median)} |
-| Inline Script Count | ${result.ssr.inlineScriptCount.median.toFixed(0)} |
-| Hydration Payload | ${formatBytes(result.ssr.hydrationPayloadSize.median)} |
-${result.ssr.rscPayloadSize ? `| RSC Payload | ${formatBytes(result.ssr.rscPayloadSize.median)} |` : ''}
-${result.ssr.nextDataSize ? `| __NEXT_DATA__ Size | ${formatBytes(result.ssr.nextDataSize.median)} |` : ''}
-${result.ssr.reactRouterDataSize ? `| React Router Data | ${formatBytes(result.ssr.reactRouterDataSize.median)} |` : ''}
+${ssrTable}
 
-`
-      : '';
+`;
+    }
+
+    // Core Web Vitals table
+    const cwvTable = formatTable(
+      ['Metric', 'Median', 'P75', 'P95'],
+      [
+        ['LCP', formatMs(result.cwv.lcp.median), formatMs(result.cwv.lcp.p75), formatMs(result.cwv.lcp.p95)],
+        ['FCP', formatMs(result.cwv.fcp.median), formatMs(result.cwv.fcp.p75), formatMs(result.cwv.fcp.p95)],
+        ['CLS', result.cwv.cls.median.toFixed(3), result.cwv.cls.p75.toFixed(3), result.cwv.cls.p95.toFixed(3)],
+        ['TTFB', formatMs(result.cwv.ttfb.median), formatMs(result.cwv.ttfb.p75), formatMs(result.cwv.ttfb.p95)],
+      ]
+    );
+
+    // Resources table
+    const resourcesTable = formatTable(
+      ['Metric', 'Median'],
+      [
+        ['Total Transfer', formatBytes(result.resources.totalTransfer.median)],
+        ['Resource Count', result.resources.totalCount.median.toFixed(0)],
+      ]
+    );
+
+    // Timing table
+    const timingTable = formatTable(
+      ['Metric', 'Median'],
+      [
+        ['DOM Content Loaded', formatMs(result.extended.domContentLoaded.median)],
+        ['Load', formatMs(result.extended.load.median)],
+        ['Total Blocking Time', formatMs(result.extended.tbt.median)],
+        ['Long Tasks', result.javascript.longTasks.median.toFixed(0)],
+        ['Heap Size', formatBytes(result.javascript.heapSize.median)],
+      ]
+    );
 
     return `# Benchmark Results
 
@@ -76,29 +113,15 @@ ${result.ssr.reactRouterDataSize ? `| React Router Data | ${formatBytes(result.s
 
 ## Core Web Vitals
 
-| Metric | Median | P75 | P95 |
-|--------|--------|-----|-----|
-| LCP | ${formatMs(result.cwv.lcp.median)} | ${formatMs(result.cwv.lcp.p75)} | ${formatMs(result.cwv.lcp.p95)} |
-| FCP | ${formatMs(result.cwv.fcp.median)} | ${formatMs(result.cwv.fcp.p75)} | ${formatMs(result.cwv.fcp.p95)} |
-| CLS | ${result.cwv.cls.median.toFixed(3)} | ${result.cwv.cls.p75.toFixed(3)} | ${result.cwv.cls.p95.toFixed(3)} |
-| TTFB | ${formatMs(result.cwv.ttfb.median)} | ${formatMs(result.cwv.ttfb.p75)} | ${formatMs(result.cwv.ttfb.p95)} |
+${cwvTable}
 
 ## Resources
 
-| Metric | Median |
-|--------|--------|
-| Total Transfer | ${formatBytes(result.resources.totalTransfer.median)} |
-| Resource Count | ${result.resources.totalCount.median.toFixed(0)} |
+${resourcesTable}
 
 ${formatResourcesByType(result)}## Timing & Blocking
 
-| Metric | Median |
-|--------|--------|
-| DOM Content Loaded | ${formatMs(result.extended.domContentLoaded.median)} |
-| Load | ${formatMs(result.extended.load.median)} |
-| Total Blocking Time | ${formatMs(result.extended.tbt.median)} |
-| Long Tasks | ${result.javascript.longTasks.median.toFixed(0)} |
-| Heap Size | ${formatBytes(result.javascript.heapSize.median)} |
+${timingTable}
 
 ${ssrSection}`;
   }

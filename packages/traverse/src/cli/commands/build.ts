@@ -5,6 +5,7 @@
 
 import type { BuildCommand } from '../../types.ts';
 import { measureColdBuild, formatBuildTime, type BuildMetrics } from '../../dx/index.ts';
+import { formatTable } from '../format.ts';
 
 const formatOutput = (
   result: BuildMetrics,
@@ -15,14 +16,18 @@ const formatOutput = (
   }
 
   if (format === 'markdown') {
+    const table = formatTable(
+      ['Metric', 'Value'],
+      [
+        ['Cold Build Time', formatBuildTime(result.coldBuildTime)],
+        ['Command', `\`${result.command}\``],
+        ['Cache Cleared', result.cacheCleared ? 'Yes' : 'No'],
+        ['Exit Code', String(result.exitCode)],
+      ]
+    );
     return `# Build Metrics
 
-| Metric | Value |
-|--------|-------|
-| Cold Build Time | ${formatBuildTime(result.coldBuildTime)} |
-| Command | \`${result.command}\` |
-| Cache Cleared | ${result.cacheCleared ? 'Yes' : 'No'} |
-| Exit Code | ${result.exitCode} |
+${table}
 `;
   }
 
