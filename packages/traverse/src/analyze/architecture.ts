@@ -73,59 +73,50 @@ const chunkContains = async (
 
 /**
  * Detect architecture signals from Next.js build.
+ * 
+ * Modern Next.js (13+) uses App Router with RSC by default.
+ * This detection focuses on Next.js 14+ patterns.
  */
 const detectNextJsArchitecture = async (
   buildDir: string
 ): Promise<ArchitectureSignal[]> => {
   const signals: ArchitectureSignal[] = [];
 
-  // Check for App Router (RSC-based)
-  const hasAppRouter = await fileExists(`${buildDir}/app-paths-manifest.json`);
-  signals.push({
-    indicator: 'App Router (app/ directory)',
-    detected: hasAppRouter,
-    weight: 3,
-    implies: hasAppRouter ? 'transitional' : null,
-  });
-
-  // Check for Pages Router
-  const hasPagesRouter = await fileExists(`${buildDir}/server/pages-manifest.json`);
-  signals.push({
-    indicator: 'Pages Router (pages/ directory)',
-    detected: hasPagesRouter,
-    weight: 2,
-    implies: hasPagesRouter && !hasAppRouter ? 'spa' : null,
-  });
-
-  // Check for Server Actions
-  const serverActionsManifest = await readJson<Record<string, unknown>>(
-    `${buildDir}/server/server-reference-manifest.json`
+  // Check for App Router - the standard in modern Next.js
+  // Manifest is in server/ directory
+  const appPathsManifest = await readJson<Record<string, string>>(
+    `${buildDir}/server/app-paths-manifest.json`
   );
-  const hasServerActions = serverActionsManifest !== null && 
-    Object.keys(serverActionsManifest).length > 0;
+  const hasAppRouter = appPathsManifest !== null && Object.keys(appPathsManifest).length > 0;
+  
   signals.push({
-    indicator: 'Server Actions',
-    detected: hasServerActions,
-    weight: 2,
+    indicator: 'App Router (RSC-based)',
+    detected: hasAppRouter,
+    weight: 5, // High weight - this is the modern default
     implies: 'transitional',
   });
 
-  // Check for static export (MPA-like)
-  const prerenderManifest = await readJson<{ routes?: Record<string, unknown> }>(
-    `${buildDir}/prerender-manifest.json`
-  );
+  // Check for static/prerendered routes
+  const prerenderManifest = await readJson<{ 
+    routes?: Record<string, unknown>;
+    dynamicRoutes?: Record<string, unknown>;
+  }>(`${buildDir}/prerender-manifest.json`);
+  
   const staticRouteCount = prerenderManifest?.routes 
     ? Object.keys(prerenderManifest.routes).length 
     : 0;
-  const hasStaticExport = staticRouteCount > 0;
+  const dynamicRouteCount = prerenderManifest?.dynamicRoutes
+    ? Object.keys(prerenderManifest.dynamicRoutes).length
+    : 0;
+    
   signals.push({
-    indicator: `Static/ISR routes (${staticRouteCount} routes)`,
-    detected: hasStaticExport,
+    indicator: `Prerendered routes (${staticRouteCount} static, ${dynamicRouteCount} dynamic)`,
+    detected: staticRouteCount > 0 || dynamicRouteCount > 0,
     weight: 1,
-    implies: null, // Could be either
+    implies: null,
   });
 
-  // Check for client components (indicates hydration needed)
+  // Check for client components via build manifest
   const buildManifest = await readJson<{ pages?: Record<string, string[]> }>(
     `${buildDir}/build-manifest.json`
   );
@@ -133,10 +124,19 @@ const detectNextJsArchitecture = async (
     ? Object.values(buildManifest.pages).some(chunks => chunks.length > 0)
     : false;
   signals.push({
-    indicator: 'Client-side JavaScript chunks',
+    indicator: 'Client components',
     detected: hasClientChunks,
     weight: 2,
-    implies: hasClientChunks ? 'transitional' : 'mpa',
+    implies: 'transitional',
+  });
+
+  // Turbopack detection (Next.js 15+)
+  const usesTurbopack = await fileExists(`${buildDir}/turbopack`);
+  signals.push({
+    indicator: 'Turbopack bundler',
+    detected: usesTurbopack,
+    weight: 1,
+    implies: null,
   });
 
   return signals;
@@ -261,6 +261,10 @@ const detectGenericArchitecture = async (
 
 /**
  * Determine hydration strategy from signals.
+ * 
+ * Modern frameworks:
+ * - Next.js App Router: progressive (RSC + selective hydration)
+ * - React Router 7: full (traditional hydration after SSR)
  */
 const determineHydrationStrategy = (
   framework: FrameworkType,
@@ -269,20 +273,15 @@ const determineHydrationStrategy = (
   const hasIslands = signals.some(s => s.indicator.includes('Islands') && s.detected);
   if (hasIslands) return 'islands';
 
-  const hasRSC = signals.some(s => 
-    (s.indicator.includes('App Router') || s.indicator.includes('Server Components')) && s.detected
-  );
-  if (hasRSC) return 'progressive';
-
-  const hasHydration = signals.some(s => 
-    s.indicator.toLowerCase().includes('hydration') && s.detected
-  );
-  if (!hasHydration) return 'none';
-
-  // Next.js App Router uses progressive hydration
+  // Next.js with App Router = progressive hydration via RSC
   if (framework === 'nextjs') {
     const hasAppRouter = signals.some(s => s.indicator.includes('App Router') && s.detected);
     return hasAppRouter ? 'progressive' : 'full';
+  }
+
+  // React Router 7 uses full hydration after SSR
+  if (framework === 'react-router') {
+    return 'full';
   }
 
   return 'full';
@@ -290,22 +289,22 @@ const determineHydrationStrategy = (
 
 /**
  * Determine data strategy from signals.
+ * 
+ * Modern frameworks:
+ * - Next.js App Router: RSC (React Server Components)
+ * - React Router 7: loaders (route-based data loading)
  */
 const determineDataStrategy = (
   framework: FrameworkType,
   signals: readonly ArchitectureSignal[]
 ): DataStrategy => {
   if (framework === 'nextjs') {
+    // Modern Next.js uses App Router with RSC
     const hasAppRouter = signals.some(s => s.indicator.includes('App Router') && s.detected);
-    const hasPagesRouter = signals.some(s => s.indicator.includes('Pages Router') && s.detected);
-    
-    if (hasAppRouter && hasPagesRouter) return 'mixed';
-    if (hasAppRouter) return 'rsc';
-    if (hasPagesRouter) return 'getServerSideProps';
+    return hasAppRouter ? 'rsc' : 'client-fetch';
   }
 
   if (framework === 'react-router') {
-    // React Router 7 uses loaders pattern regardless of Single Fetch
     return 'loaders';
   }
 
@@ -370,12 +369,17 @@ export const analyzeArchitecture = async (
     const hydration = determineHydrationStrategy(framework, signals);
     const dataStrategy = determineDataStrategy(framework, signals);
 
-    // Derive boolean flags
-    const hasClientRouter = signals.some(s => 
-      (s.indicator.includes('Router') || s.indicator.includes('Client entry')) && s.detected
-    );
-    const hasServerComponents = framework === 'nextjs' && 
-      signals.some(s => s.indicator.includes('App Router') && s.detected);
+    // Derive boolean flags based on modern framework patterns
+    const hasAppRouter = signals.some(s => s.indicator.includes('App Router') && s.detected);
+    
+    // All modern frameworks have client routers
+    const hasClientRouter = framework === 'nextjs' || framework === 'react-router' ||
+      signals.some(s => s.indicator.includes('Client entry') && s.detected);
+    
+    // Next.js App Router = Server Components
+    const hasServerComponents = framework === 'nextjs' && hasAppRouter;
+    
+    // Streaming: Next.js App Router supports it, React Router 7 with turbo-stream
     const supportsStreaming = hasServerComponents || 
       signals.some(s => s.indicator.includes('turbo-stream') && s.detected);
 
