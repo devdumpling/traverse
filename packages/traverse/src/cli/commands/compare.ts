@@ -2,6 +2,7 @@
  * Compare command implementation.
  */
 
+import { writeFile } from 'node:fs/promises';
 import type { CompareCommand, RuntimeBenchmark, StaticAnalysis } from '../../types.ts';
 import {
   compare,
@@ -175,7 +176,7 @@ export const executeCompare = async (command: CompareCommand): Promise<number> =
   const output = formatComparison(result.value, command.format);
 
   if (command.output) {
-    await Bun.write(command.output, output);
+    await writeFile(command.output, output);
     console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);

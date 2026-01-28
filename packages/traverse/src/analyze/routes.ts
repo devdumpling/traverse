@@ -1,12 +1,13 @@
 /**
  * Route-level cost analysis.
- * 
+ *
  * Calculates the JS cost to load each route, including:
  * - Unique chunks for that route
  * - Shared chunks it depends on
  * - Total cost to navigate to that route
  */
 
+import { readFile } from 'node:fs/promises';
 import type { Result, ByteSize, FrameworkType } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { calculateByteSizeFromFile, sumByteSizes, emptyByteSize } from './utils.ts';
@@ -54,7 +55,7 @@ const getChunkSizes = async (
   cache: ChunkSizeCache
 ): Promise<ByteSize[]> => {
   const sizes: ByteSize[] = [];
-  
+
   for (const chunk of chunks) {
     if (cache[chunk]) {
       sizes.push(cache[chunk]);
@@ -66,20 +67,20 @@ const getChunkSizes = async (
         `${buildDir}/client/${chunk}`,
         `${buildDir}/client/assets/${chunk.replace(/^assets\//, '')}`,
       ];
-      
+
       let size: ByteSize | null = null;
       for (const path of paths) {
         size = await calculateByteSizeFromFile(path);
         if (size) break;
       }
-      
+
       if (size) {
         cache[chunk] = size;
         sizes.push(size);
       }
     }
   }
-  
+
   return sizes;
 };
 
@@ -97,7 +98,7 @@ const analyzeNextJsRoutes = async (
 
   let manifest: BuildManifest | null = null;
   try {
-    const content = await Bun.file(`${buildDir}/build-manifest.json`).text();
+    const content = await readFile(`${buildDir}/build-manifest.json`, 'utf-8');
     manifest = JSON.parse(content) as BuildManifest;
   } catch {
     return err({
@@ -107,7 +108,7 @@ const analyzeNextJsRoutes = async (
   }
 
   const cache: ChunkSizeCache = {};
-  
+
   // Calculate entry point cost (rootMainFiles + polyfills)
   const entryChunks = [
     ...manifest.rootMainFiles,
@@ -118,14 +119,14 @@ const analyzeNextJsRoutes = async (
 
   // Track which chunks are used by multiple routes
   const chunkUsage: Record<string, string[]> = {};
-  
+
   // Calculate per-route costs
   const routes: RouteCost[] = [];
-  
+
   for (const [route, chunks] of Object.entries(manifest.pages)) {
     // Skip internal routes
     if (route.startsWith('/_')) continue;
-    
+
     // Track chunk usage
     for (const chunk of chunks) {
       if (!chunkUsage[chunk]) chunkUsage[chunk] = [];
@@ -136,10 +137,10 @@ const analyzeNextJsRoutes = async (
   // Now calculate route costs with shared/unique breakdown
   for (const [route, chunks] of Object.entries(manifest.pages)) {
     if (route.startsWith('/_')) continue;
-    
+
     const uniqueChunks: string[] = [];
     const sharedChunks: string[] = [];
-    
+
     for (const chunk of chunks) {
       if (chunkUsage[chunk]?.length === 1) {
         uniqueChunks.push(chunk);
@@ -147,14 +148,14 @@ const analyzeNextJsRoutes = async (
         sharedChunks.push(chunk);
       }
     }
-    
+
     const uniqueSizes = await getChunkSizes(buildDir, uniqueChunks, cache);
     const sharedSizes = await getChunkSizes(buildDir, sharedChunks, cache);
-    
+
     const unique = sumByteSizes(uniqueSizes);
     const shared = sumByteSizes(sharedSizes);
     const total = sumByteSizes([unique, shared]);
-    
+
     routes.push({
       route,
       unique,
@@ -171,10 +172,11 @@ const analyzeNextJsRoutes = async (
   for (const [chunk, usedBy] of Object.entries(chunkUsage)) {
     if (usedBy.length > 1) {
       const sizes = await getChunkSizes(buildDir, [chunk], cache);
-      if (sizes.length > 0) {
+      const firstSize = sizes[0];
+      if (firstSize) {
         sharedChunks.push({
           name: chunk,
-          size: sizes[0],
+          size: firstSize,
           usedByRoutes: usedBy,
         });
       }
@@ -228,7 +230,7 @@ const analyzeViteRoutes = async (
   let manifest: ViteManifest | null = null;
   for (const path of manifestPaths) {
     try {
-      const content = await Bun.file(path).text();
+      const content = await readFile(path, 'utf-8');
       manifest = JSON.parse(content) as ViteManifest;
       break;
     } catch {
@@ -247,7 +249,7 @@ const analyzeViteRoutes = async (
   const clientDir = `${buildDir}/client`;
 
   // Find entry point
-  let entryChunks: string[] = [];
+  const entryChunks: string[] = [];
   for (const [key, entry] of Object.entries(manifest)) {
     if (entry.isEntry) {
       entryChunks.push(entry.file);
@@ -269,18 +271,19 @@ const analyzeViteRoutes = async (
 
   for (const [key, entry] of Object.entries(manifest)) {
     // Look for route patterns
-    const isRoute = entry.src?.includes('routes/') || 
+    const isRoute = entry.src?.includes('routes/') ||
                     entry.src?.includes('app/') ||
                     key.includes('route');
-    
+
     if (!isRoute || entry.isEntry) continue;
 
     // Extract route path from source
     let route = '/';
     if (entry.src) {
       const match = entry.src.match(/routes\/(.+)\.(tsx?|jsx?)$/);
-      if (match) {
-        route = '/' + match[1]
+      const matchedPath = match?.[1];
+      if (matchedPath) {
+        route = '/' + matchedPath
           .replace(/\$/g, ':')
           .replace(/_index$/, '')
           .replace(/index$/, '')
@@ -322,11 +325,11 @@ const analyzeViteRoutes = async (
 
   // Refine unique vs shared and recalculate sizes
   const refinedRoutes: RouteCost[] = [];
-  
+
   for (const r of routes) {
     const uniqueChunks: string[] = [];
     const sharedChunks: string[] = [];
-    
+
     for (const chunk of r.chunks) {
       if (chunkUsage[chunk]?.length === 1) {
         uniqueChunks.push(chunk);
@@ -356,10 +359,11 @@ const analyzeViteRoutes = async (
   for (const [chunk, usedBy] of Object.entries(chunkUsage)) {
     if (usedBy.length > 1) {
       const sizes = await getChunkSizes(clientDir, [chunk], cache);
-      if (sizes.length > 0) {
+      const firstSize = sizes[0];
+      if (firstSize) {
         sharedChunks.push({
           name: chunk,
-          size: sizes[0],
+          size: firstSize,
           usedByRoutes: usedBy,
         });
       }

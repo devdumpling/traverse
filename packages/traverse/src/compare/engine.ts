@@ -1,9 +1,10 @@
 /**
  * Comparison engine.
- * 
+ *
  * Loads and compares capture files, producing structured diffs.
  */
 
+import { readFile, access } from 'node:fs/promises';
 import type {
   Result,
   RuntimeBenchmark,
@@ -34,12 +35,12 @@ export interface CaptureFile {
 
 const detectCaptureType = (data: unknown): CaptureType | null => {
   if (typeof data !== 'object' || data === null) return null;
-  
+
   const obj = data as Record<string, unknown>;
-  
+
   // Benchmark has meta.url
-  if ('meta' in obj && typeof obj.meta === 'object' && obj.meta !== null) {
-    const meta = obj.meta as Record<string, unknown>;
+  if ('meta' in obj && typeof obj['meta'] === 'object' && obj['meta'] !== null) {
+    const meta = obj['meta'] as Record<string, unknown>;
     if ('url' in meta && 'runs' in meta && 'cwv' in obj) {
       return 'benchmark';
     }
@@ -50,7 +51,7 @@ const detectCaptureType = (data: unknown): CaptureType | null => {
       return 'static';
     }
   }
-  
+
   return null;
 };
 
@@ -60,13 +61,21 @@ export interface LoadError {
   readonly path: string;
 }
 
+const fileExists = async (path: string): Promise<boolean> => {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const loadCapture = async (
   path: string,
   label?: string
 ): Promise<Result<CaptureFile, LoadError>> => {
-  const file = Bun.file(path);
-  const exists = await file.exists();
-  
+  const exists = await fileExists(path);
+
   if (!exists) {
     return err({
       code: 'FILE_NOT_FOUND',
@@ -76,7 +85,7 @@ export const loadCapture = async (
   }
 
   const textResult = await fromPromise(
-    file.text(),
+    readFile(path, 'utf-8'),
     (): LoadError => ({
       code: 'INVALID_JSON',
       message: `Failed to read file: ${path}`,

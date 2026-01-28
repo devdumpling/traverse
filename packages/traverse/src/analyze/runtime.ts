@@ -1,6 +1,6 @@
 /**
  * Runtime cost breakdown analysis.
- * 
+ *
  * Categorizes JavaScript bundles into:
  * - Framework Core: React, React-DOM, Vue, Svelte runtime, etc.
  * - Router: Next.js router, React Router, Vue Router, etc.
@@ -9,6 +9,8 @@
  * - Application: Your actual components and logic
  */
 
+import { readFile } from 'node:fs/promises';
+import fg from 'fast-glob';
 import type { Result, ByteSize, FrameworkType } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { calculateByteSize, sumByteSizes } from './utils.ts';
@@ -172,7 +174,7 @@ const categorizeChunk = (
 
   // Check content for framework signatures
   const contentSample = content.slice(0, 10000);
-  
+
   // React signatures
   if (contentSample.includes('__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED') ||
       contentSample.includes('react.element') ||
@@ -201,27 +203,22 @@ const categorizeChunk = (
  * Find all JS files in build directory.
  */
 const findJsFiles = async (buildDir: string): Promise<string[]> => {
-  const results: string[] = [];
-  
   try {
-    const entries = await Array.fromAsync(
-      new Bun.Glob('**/*.{js,mjs}').scan({
-        cwd: buildDir,
-        absolute: false,
-      })
-    );
-    
+    const entries = await fg('**/*.{js,mjs}', {
+      cwd: buildDir,
+      absolute: false,
+    });
+
     // Filter out source maps and server-side files
-    for (const entry of entries) {
-      if (entry.endsWith('.map')) continue;
-      if (entry.includes('server/') && !entry.includes('client')) continue;
-      results.push(entry);
-    }
+    return entries.filter(entry => {
+      if (entry.endsWith('.map')) return false;
+      if (entry.includes('server/') && !entry.includes('client')) return false;
+      return true;
+    });
   } catch {
     // Directory doesn't exist
+    return [];
   }
-  
-  return results;
 };
 
 /**
@@ -233,7 +230,7 @@ export const analyzeRuntime = async (
 ): Promise<Result<RuntimeBreakdown, RuntimeError>> => {
   try {
     const files = await findJsFiles(buildDir);
-    
+
     if (files.length === 0) {
       return err({
         code: 'ANALYSIS_FAILED',
@@ -255,16 +252,16 @@ export const analyzeRuntime = async (
     for (const file of files) {
       try {
         const fullPath = `${buildDir}/${file}`;
-        const content = new Uint8Array(await Bun.file(fullPath).arrayBuffer());
+        const content = await readFile(fullPath);
         // Decode to text for pattern matching (only first 10KB for efficiency)
         const textContent = new TextDecoder().decode(content.slice(0, 10000));
-        
-        const size = calculateByteSize(content);
+
+        const size = calculateByteSize(new Uint8Array(content));
         const category = categorizeChunk(file, textContent, framework);
-        
+
         categorized[category].chunks.push(file);
         categorized[category].sizes.push(size);
-        
+
         allChunkCosts.push({
           name: file,
           size,

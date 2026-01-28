@@ -1,6 +1,6 @@
 /**
  * Framework architecture classification.
- * 
+ *
  * Detects the app's rendering/navigation strategy:
  * - MPA: Multi-page app with full page loads
  * - SPA: Single-page app with client router
@@ -8,13 +8,15 @@
  * - Islands: Isolated interactive components in static HTML
  */
 
+import { readFile } from 'node:fs/promises';
+import fg from 'fast-glob';
 import type { Result, FrameworkType } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { readJson, fileExists } from './utils.ts';
 
 export type ArchitectureType = 'mpa' | 'spa' | 'transitional' | 'islands' | 'unknown';
 
-export type HydrationStrategy = 
+export type HydrationStrategy =
   | 'full'           // Traditional: hydrate entire page
   | 'progressive'    // React 18+: selective/progressive hydration
   | 'partial'        // Only hydrate interactive parts
@@ -56,13 +58,13 @@ export interface ArchitectureError {
  * Check if any chunk contains a pattern (by reading file content).
  */
 const chunkContains = async (
-  buildDir: string, 
-  chunks: readonly string[], 
+  buildDir: string,
+  chunks: readonly string[],
   pattern: RegExp
 ): Promise<boolean> => {
   for (const chunk of chunks.slice(0, 10)) { // Limit to avoid reading too many files
     try {
-      const content = await Bun.file(`${buildDir}/${chunk}`).text();
+      const content = await readFile(`${buildDir}/${chunk}`, 'utf-8');
       if (pattern.test(content)) return true;
     } catch {
       // Skip unreadable files
@@ -73,7 +75,7 @@ const chunkContains = async (
 
 /**
  * Detect architecture signals from Next.js build.
- * 
+ *
  * Modern Next.js (13+) uses App Router with RSC by default.
  * This detection focuses on Next.js 14+ patterns.
  */
@@ -88,7 +90,7 @@ const detectNextJsArchitecture = async (
     `${buildDir}/server/app-paths-manifest.json`
   );
   const hasAppRouter = appPathsManifest !== null && Object.keys(appPathsManifest).length > 0;
-  
+
   signals.push({
     indicator: 'App Router (RSC-based)',
     detected: hasAppRouter,
@@ -97,18 +99,18 @@ const detectNextJsArchitecture = async (
   });
 
   // Check for static/prerendered routes
-  const prerenderManifest = await readJson<{ 
+  const prerenderManifest = await readJson<{
     routes?: Record<string, unknown>;
     dynamicRoutes?: Record<string, unknown>;
   }>(`${buildDir}/prerender-manifest.json`);
-  
-  const staticRouteCount = prerenderManifest?.routes 
-    ? Object.keys(prerenderManifest.routes).length 
+
+  const staticRouteCount = prerenderManifest?.routes
+    ? Object.keys(prerenderManifest.routes).length
     : 0;
   const dynamicRouteCount = prerenderManifest?.dynamicRoutes
     ? Object.keys(prerenderManifest.dynamicRoutes).length
     : 0;
-    
+
   signals.push({
     indicator: `Prerendered routes (${staticRouteCount} static, ${dynamicRouteCount} dynamic)`,
     detected: staticRouteCount > 0 || dynamicRouteCount > 0,
@@ -120,7 +122,7 @@ const detectNextJsArchitecture = async (
   const buildManifest = await readJson<{ pages?: Record<string, string[]> }>(
     `${buildDir}/build-manifest.json`
   );
-  const hasClientChunks = buildManifest?.pages 
+  const hasClientChunks = buildManifest?.pages
     ? Object.values(buildManifest.pages).some(chunks => chunks.length > 0)
     : false;
   signals.push({
@@ -173,13 +175,11 @@ const detectReactRouterArchitecture = async (
   // Look for .data endpoint patterns in client code
   const clientDir = `${buildDir}/client/assets`;
   try {
-    const files = await Array.fromAsync(
-      new Bun.Glob('*.js').scan({ cwd: clientDir, absolute: false })
-    );
-    
+    const files = await fg('*.js', { cwd: clientDir, absolute: false });
+
     // Check if any client file references .data endpoints (Single Fetch)
     for (const file of files.slice(0, 5)) {
-      const content = await Bun.file(`${clientDir}/${file}`).text();
+      const content = await readFile(`${clientDir}/${file}`, 'utf-8');
       if (content.includes('.data') || content.includes('turbo-stream')) {
         signals.push({
           indicator: 'Single Fetch / turbo-stream',
@@ -261,7 +261,7 @@ const detectGenericArchitecture = async (
 
 /**
  * Determine hydration strategy from signals.
- * 
+ *
  * Modern frameworks:
  * - Next.js App Router: progressive (RSC + selective hydration)
  * - React Router 7: full (traditional hydration after SSR)
@@ -289,7 +289,7 @@ const determineHydrationStrategy = (
 
 /**
  * Determine data strategy from signals.
- * 
+ *
  * Modern frameworks:
  * - Next.js App Router: RSC (React Server Components)
  * - React Router 7: loaders (route-based data loading)
@@ -371,16 +371,16 @@ export const analyzeArchitecture = async (
 
     // Derive boolean flags based on modern framework patterns
     const hasAppRouter = signals.some(s => s.indicator.includes('App Router') && s.detected);
-    
+
     // All modern frameworks have client routers
     const hasClientRouter = framework === 'nextjs' || framework === 'react-router' ||
       signals.some(s => s.indicator.includes('Client entry') && s.detected);
-    
+
     // Next.js App Router = Server Components
     const hasServerComponents = framework === 'nextjs' && hasAppRouter;
-    
+
     // Streaming: Next.js App Router supports it, React Router 7 with turbo-stream
-    const supportsStreaming = hasServerComponents || 
+    const supportsStreaming = hasServerComponents ||
       signals.some(s => s.indicator.includes('turbo-stream') && s.detected);
 
     return ok({

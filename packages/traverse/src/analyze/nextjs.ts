@@ -3,6 +3,7 @@
  * Parses .next/ build output to extract routes, manifests, and framework details.
  */
 
+import { readFile, access } from 'node:fs/promises';
 import type { Result, NextJsAnalysis, RouteAnalysis, RouterType } from '../types.ts';
 import { ok, err } from '../result.ts';
 
@@ -39,7 +40,7 @@ interface BuildManifest {
 
 const readJson = async <T>(path: string): Promise<T | null> => {
   try {
-    const content = await Bun.file(path).text();
+    const content = await readFile(path, 'utf-8');
     return JSON.parse(content) as T;
   } catch {
     return null;
@@ -48,7 +49,7 @@ const readJson = async <T>(path: string): Promise<T | null> => {
 
 const fileExists = async (path: string): Promise<boolean> => {
   try {
-    await Bun.file(path).text();
+    await access(path);
     return true;
   } catch {
     return false;
@@ -62,29 +63,29 @@ const detectRouterType = async (buildDir: string): Promise<RouterType> => {
   const routesManifest = await readJson<RoutesManifest>(
     `${buildDir}/routes-manifest.json`
   );
-  
+
   if (routesManifest?.appType === 'app') return 'app';
-  
+
   // Check for app-path-routes-manifest (App Router indicator)
   const appRoutes = await readJson<AppPathRoutesManifest>(
     `${buildDir}/app-path-routes-manifest.json`
   );
-  
+
   if (appRoutes && Object.keys(appRoutes).length > 0) {
     // If we also have pages, it's hybrid
     const buildManifest = await readJson<BuildManifest>(
       `${buildDir}/build-manifest.json`
     );
-    const hasPages = buildManifest?.pages && 
+    const hasPages = buildManifest?.pages &&
       Object.keys(buildManifest.pages).some(p => p !== '/_app' && p !== '/_document');
-    
+
     return hasPages ? 'hybrid' : 'app';
   }
-  
+
   // Check for pages-manifest (Pages Router indicator)
   const pagesManifest = await fileExists(`${buildDir}/server/pages-manifest.json`);
   if (pagesManifest) return 'pages';
-  
+
   return 'unknown';
 };
 
@@ -122,18 +123,18 @@ const getRouteType = (routePath: string): 'static' | 'dynamic' | 'catch-all' => 
  */
 const parseRoutes = async (buildDir: string): Promise<RouteAnalysis[]> => {
   const routes: RouteAnalysis[] = [];
-  
+
   // Parse routes-manifest.json for static and dynamic routes
   const routesManifest = await readJson<RoutesManifest>(
     `${buildDir}/routes-manifest.json`
   );
-  
+
   if (routesManifest) {
     // Add static routes
     for (const route of routesManifest.staticRoutes) {
       // Skip internal routes
       if (route.page.startsWith('/_')) continue;
-      
+
       routes.push({
         path: route.page,
         type: 'static',
@@ -141,11 +142,11 @@ const parseRoutes = async (buildDir: string): Promise<RouteAnalysis[]> => {
         chunks: [], // Would need build-manifest correlation
       });
     }
-    
+
     // Add dynamic routes
     for (const route of routesManifest.dynamicRoutes) {
       if (route.page.startsWith('/_')) continue;
-      
+
       routes.push({
         path: route.page,
         type: getRouteType(route.page),
@@ -154,7 +155,7 @@ const parseRoutes = async (buildDir: string): Promise<RouteAnalysis[]> => {
       });
     }
   }
-  
+
   return routes;
 };
 
@@ -176,10 +177,10 @@ export const analyzeNextJs = async (
   try {
     const routerType = await detectRouterType(buildDir);
     const parsedRoutes = await parseRoutes(buildDir);
-    
+
     // Check for middleware
     const hasMiddleware = await fileExists(`${buildDir}/server/middleware-manifest.json`);
-    
+
     // Check for Turbopack (presence of turbopack file or specific chunks)
     const hasTurbopack = await fileExists(`${buildDir}/turbopack`);
 

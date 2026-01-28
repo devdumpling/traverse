@@ -2,7 +2,7 @@
  * Help text generation for CLI commands.
  */
 
-const VERSION = '0.1.0';
+import { VERSION } from '../version.ts';
 
 const MAIN_HELP = `
 traverse v${VERSION}

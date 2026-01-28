@@ -31,6 +31,7 @@ traverse bench http://localhost:3000 --runs 5 --format markdown
 ```
 
 **Options:**
+
 - `--runs, -n` - Number of runs (default: 5)
 - `--device` - Device preset: `desktop` or `mobile`
 - `--network` - Network preset: `4g`, `3g`, or `none`
@@ -39,12 +40,12 @@ traverse bench http://localhost:3000 --runs 5 --format markdown
 
 **Captures:**
 
-| Category | Metrics |
-|----------|---------|
-| Core Web Vitals | LCP, FCP, CLS, TTFB |
-| Timing | DOM Content Loaded, Load, Total Blocking Time |
-| Resources | Transfer size, request count, cache hits |
-| JavaScript | Heap size, long task count |
+| Category        | Metrics                                                    |
+| --------------- | ---------------------------------------------------------- |
+| Core Web Vitals | LCP, FCP, CLS, TTFB                                        |
+| Timing          | DOM Content Loaded, Load, Total Blocking Time              |
+| Resources       | Transfer size, request count, cache hits                   |
+| JavaScript      | Heap size, long task count                                 |
 | SSR & Hydration | Framework detection, inline script size, hydration payload |
 
 **Example Output (markdown):**
@@ -81,6 +82,7 @@ traverse analyze ./my-next-app --format markdown
 ```
 
 **Options:**
+
 - `--build-dir, -b` - Build output directory (auto-detected)
 - `--framework` - Framework hint (auto-detected)
 - `--output, -o` - Write to file
@@ -88,14 +90,14 @@ traverse analyze ./my-next-app --format markdown
 
 **Captures:**
 
-| Category | Metrics |
-|----------|---------|
-| Bundle Sizes | Total, JS, CSS (raw, gzip, brotli) |
-| Bundle Split | Vendor JS vs non-vendor JS |
+| Category     | Metrics                                       |
+| ------------ | --------------------------------------------- |
+| Bundle Sizes | Total, JS, CSS (raw, gzip, brotli)            |
+| Bundle Split | Vendor JS vs non-vendor JS                    |
 | Dependencies | Production count, dev count, top dependencies |
-| Chunks | Individual chunk sizes |
-| Routes | Route paths and types (Next.js) |
-| Framework | Type, version, router type, turbopack usage |
+| Chunks       | Individual chunk sizes                        |
+| Routes       | Route paths and types (Next.js)               |
+| Framework    | Type, version, router type, turbopack usage   |
 
 **Example Output:**
 
@@ -122,6 +124,7 @@ traverse analyze ./my-next-app --format markdown
 ```
 
 **Supported Frameworks:**
+
 - Next.js (App Router & Pages Router)
 - React Router 7
 - Generic SPAs (Vite, etc.)
@@ -137,6 +140,7 @@ traverse compare --baseline old.json --current new.json --format markdown
 ```
 
 **Options:**
+
 - `--baseline, -b` - Baseline capture file (required)
 - `--current, -c` - Current capture file (required)
 - `--output, -o` - Write to file
@@ -172,12 +176,14 @@ traverse build ./my-app --format markdown
 ```
 
 **Options:**
+
 - `--cmd, -c` - Custom build command (auto-detected)
 - `--no-cache` - Skip cache clearing
 - `--output, -o` - Write to file
 - `--format` - Output format: `json`, `markdown`, `html`
 
 **What it does:**
+
 1. Detects framework and build command
 2. Clears build caches (`.next/`, `build/`, `node_modules/.cache/`)
 3. Runs production build
@@ -206,6 +212,7 @@ traverse journey ./journeys/checkout.ts --base-url http://localhost:3000 --runs 
 ```
 
 **Options:**
+
 - `--base-url, -u` - Base URL for the journey (required)
 - `--runs, -n` - Number of complete runs (default: 3)
 - `--device` - Device preset
@@ -215,22 +222,22 @@ traverse journey ./journeys/checkout.ts --base-url http://localhost:3000 --runs 
 **Journey Definition:**
 
 ```typescript
-import { defineJourney } from 'traverse';
+import { defineJourney } from "traverse";
 
 export default defineJourney({
-  name: 'checkout-flow',
-  description: 'Complete purchase from homepage to confirmation',
+  name: "checkout-flow",
+  description: "Complete purchase from homepage to confirmation",
 
   async run(ctx) {
-    await ctx.step('homepage', async ({ page, capture }) => {
-      await page.goto('/');
-      await page.waitForLoadState('networkidle');
+    await ctx.step("homepage", async ({ page, capture }) => {
+      await page.goto("/");
+      await page.waitForLoadState("networkidle");
       await capture.navigation();
       await capture.cwv();
       await capture.resources();
     });
 
-    await ctx.step('products', async ({ page, capture }) => {
+    await ctx.step("products", async ({ page, capture }) => {
       await page.click('[data-testid="browse-products"]');
       await page.waitForSelector('[data-testid="product-card"]');
       await capture.navigation(); // Detects soft vs hard nav
@@ -238,7 +245,7 @@ export default defineJourney({
       await capture.resources();
     });
 
-    await ctx.step('product-detail', async ({ page, capture }) => {
+    await ctx.step("product-detail", async ({ page, capture }) => {
       await page.click('[data-testid="product-card"]:first-child');
       await page.waitForSelector('[data-testid="add-to-cart"]');
       await capture.navigation();
@@ -250,12 +257,12 @@ export default defineJourney({
 
 **Navigation Types Detected:**
 
-| Type | Meaning | Example |
-|------|---------|---------|
-| `initial` | First page load | Landing on site |
-| `soft` | Client-side routing (URL changes) | Next.js Link, React Router |
-| `hard` | Full page reload | Form submit, window.location |
-| `none` | No URL change | React state update, modal open |
+| Type      | Meaning                           | Example                        |
+| --------- | --------------------------------- | ------------------------------ |
+| `initial` | First page load                   | Landing on site                |
+| `soft`    | Client-side routing (URL changes) | Next.js Link, React Router     |
+| `hard`    | Full page reload                  | Form submit, window.location   |
+| `none`    | No URL change                     | React state update, modal open |
 
 ---
 
@@ -291,43 +298,56 @@ traverse compare --baseline a.json --current b.json -o comparison.md --format ma
 
 ## Metrics Reference
 
+### Units
+
+| Unit                  | Metrics                                       | Notes                                                                                     |
+| --------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Milliseconds (ms)** | LCP, FCP, TTFB, TBT, DOM Content Loaded, Load | Time-based metrics                                                                        |
+| **Unitless (0-1)**    | CLS                                           | Layout shift score, lower is better. Good: <0.1, Needs improvement: 0.1-0.25, Poor: >0.25 |
+| **Count**             | Long Tasks, Requests, Dependencies            | Integer counts                                                                            |
+| **Bytes**             | Transfer size, Heap size, Bundle sizes        | Displayed as B, KB, or MB                                                                 |
+
 ### Core Web Vitals
-| Metric | Description |
-|--------|-------------|
-| **LCP** | Largest Contentful Paint - when main content is visible |
-| **FCP** | First Contentful Paint - when first content is visible |
-| **CLS** | Cumulative Layout Shift - visual stability score |
-| **TTFB** | Time to First Byte - server response time |
+
+| Metric   | Unit  | Good  | Needs Work | Poor  | Description                                             |
+| -------- | ----- | ----- | ---------- | ----- | ------------------------------------------------------- |
+| **LCP**  | ms    | <2500 | 2500-4000  | >4000 | Largest Contentful Paint - when main content is visible |
+| **FCP**  | ms    | <1800 | 1800-3000  | >3000 | First Contentful Paint - when first content is visible  |
+| **CLS**  | score | <0.1  | 0.1-0.25   | >0.25 | Cumulative Layout Shift - visual stability (unitless)   |
+| **TTFB** | ms    | <800  | 800-1800   | >1800 | Time to First Byte - server response time               |
 
 ### Extended Metrics
-| Metric | Description |
-|--------|-------------|
-| **TBT** | Total Blocking Time - sum of blocking portions of long tasks |
-| **DOM Content Loaded** | When HTML is parsed |
-| **Load** | When page is fully loaded |
-| **Long Tasks** | Count of tasks > 50ms |
-| **Heap Size** | JavaScript heap memory usage |
+
+| Metric                 | Unit  | Description                                                          |
+| ---------------------- | ----- | -------------------------------------------------------------------- |
+| **TBT**                | ms    | Total Blocking Time - sum of blocking portions of long tasks (>50ms) |
+| **DOM Content Loaded** | ms    | When HTML is fully parsed                                            |
+| **Load**               | ms    | When page and resources are fully loaded                             |
+| **Long Tasks**         | count | Number of tasks blocking main thread >50ms                           |
+| **Heap Size**          | bytes | JavaScript heap memory usage                                         |
 
 ### SSR & Hydration
-| Metric | Description |
-|--------|-------------|
-| **Framework** | Detected framework (next, react-router, remix) |
-| **Has SSR Content** | Whether HTML contains meaningful content |
-| **Inline Script Size** | Total size of `<script>` tags without `src` |
-| **Hydration Payload** | Size of framework hydration data |
-| **RSC Payload** | Size of React Server Component data (Next.js) |
-| **__NEXT_DATA__** | Size of Next.js page props (Pages Router) |
-| **React Router Data** | Size of React Router context data |
+
+| Metric                 | Description                                    |
+| ---------------------- | ---------------------------------------------- |
+| **Framework**          | Detected framework (next, react-router, remix) |
+| **Has SSR Content**    | Whether HTML contains meaningful content       |
+| **Inline Script Size** | Total size of `<script>` tags without `src`    |
+| **Hydration Payload**  | Size of framework hydration data               |
+| **RSC Payload**        | Size of React Server Component data (Next.js)  |
+| \***\*NEXT_DATA\*\***  | Size of Next.js page props (Pages Router)      |
+| **React Router Data**  | Size of React Router context data              |
 
 ### Bundle Analysis
-| Metric | Description |
-|--------|-------------|
-| **Total** | Combined JS + CSS size |
-| **JavaScript** | All JS bundle size |
-| **CSS** | All CSS bundle size |
-| **Vendor** | Third-party/framework JS |
-| **Non-Vendor** | Your application code |
-| **Dependencies** | Count from package.json |
+
+| Metric           | Description              |
+| ---------------- | ------------------------ |
+| **Total**        | Combined JS + CSS size   |
+| **JavaScript**   | All JS bundle size       |
+| **CSS**          | All CSS bundle size      |
+| **Vendor**       | Third-party/framework JS |
+| **Non-Vendor**   | Your application code    |
+| **Dependencies** | Count from package.json  |
 
 ---
 
@@ -383,7 +403,10 @@ PORT=3002 bun run start:react  # Basic React SPA
 ## Development
 
 ```bash
-# Run tests (115 tests)
+# Install Playwright browsers (required for bench/journey commands)
+cd packages/traverse && bunx playwright install chromium
+
+# Run tests (156 tests)
 bun test
 
 # Type check

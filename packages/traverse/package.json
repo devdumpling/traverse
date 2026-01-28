@@ -1,27 +1,70 @@
 {
-  "name": "traverse",
+  "name": "@wellwright/traverse",
   "version": "0.1.0",
   "description": "Performance data capture and analysis toolkit for web applications",
   "type": "module",
+  "license": "MIT",
+
+  "main": "./dist/index.js",
+  "types": "./dist/src/index.d.ts",
+
   "bin": {
-    "traverse": "src/cli/index.ts"
+    "traverse": "./dist/cli/index.js"
   },
+
   "exports": {
-    ".": "./src/index.ts",
-    "./journey": "./src/journey/index.ts",
-    "./config": "./src/config/index.ts"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./journey": {
+      "types": "./dist/src/journey/index.d.ts",
+      "import": "./dist/journey/index.js"
+    },
+    "./config": {
+      "types": "./dist/src/config/index.d.ts",
+      "import": "./dist/config/index.js"
+    }
   },
+
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+
+  "engines": {
+    "node": ">=18.0.0"
+  },
+
   "scripts": {
+    "build": "bun run scripts/build.ts",
     "dev": "bun run src/cli/index.ts",
     "test": "bun test",
-    "typecheck": "bun run tsc --noEmit"
+    "typecheck": "bun run tsc --noEmit",
+    "prepublishOnly": "bun run typecheck && bun test && bun run build"
   },
+
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devdumpling/traverse.git"
+  },
+
+  "keywords": [
+    "performance",
+    "web-vitals",
+    "playwright",
+    "benchmark",
+    "bundle-analysis"
+  ],
+
   "dependencies": {
+    "fast-glob": "^3.3.3",
     "playwright": "^1.57.0"
   },
+
   "devDependencies": {
     "@types/bun": "^1.3.6",
     "typescript": "^5.9.3"
-  },
-  "license": "MIT"
+  }
 }

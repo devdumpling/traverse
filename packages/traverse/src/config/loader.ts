@@ -1,8 +1,9 @@
 /**
  * Configuration file loader.
- * Loads traverse.config.ts using Bun's native TypeScript support.
+ * Loads traverse.config.ts using native TypeScript support.
  */
 
+import { access } from 'node:fs/promises';
 import type { Result, TraverseConfig, ConfigError } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { DEFAULT_CONFIG } from './defaults.ts';
@@ -16,9 +17,11 @@ const CONFIG_FILENAMES = [
 const findConfigFile = async (cwd: string): Promise<string | null> => {
   for (const filename of CONFIG_FILENAMES) {
     const path = `${cwd}/${filename}`;
-    const file = Bun.file(path);
-    if (await file.exists()) {
+    try {
+      await access(path);
       return path;
+    } catch {
+      // File doesn't exist, try next
     }
   }
   return null;

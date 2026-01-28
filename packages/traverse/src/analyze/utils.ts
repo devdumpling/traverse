@@ -2,7 +2,8 @@
  * Shared utilities for static analysis modules.
  */
 
-import { gzipSync } from 'bun';
+import { readFile, access } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
 import type { ByteSize } from '../types.ts';
 
 /**
@@ -10,7 +11,7 @@ import type { ByteSize } from '../types.ts';
  */
 export const readJson = async <T>(path: string): Promise<T | null> => {
   try {
-    const content = await Bun.file(path).text();
+    const content = await readFile(path, 'utf-8');
     return JSON.parse(content) as T;
   } catch {
     return null;
@@ -18,12 +19,12 @@ export const readJson = async <T>(path: string): Promise<T | null> => {
 };
 
 /**
- * Check if a file exists by attempting to read it.
+ * Check if a file exists by attempting to access it.
  */
 export const fileExists = async (path: string): Promise<boolean> => {
   try {
-    const file = Bun.file(path);
-    return await file.exists();
+    await access(path);
+    return true;
   } catch {
     return false;
   }
@@ -47,8 +48,8 @@ export const calculateByteSize = (content: Uint8Array): ByteSize => {
  */
 export const calculateByteSizeFromFile = async (filePath: string): Promise<ByteSize | null> => {
   try {
-    const content = new Uint8Array(await Bun.file(filePath).arrayBuffer());
-    return calculateByteSize(content);
+    const content = await readFile(filePath);
+    return calculateByteSize(new Uint8Array(content));
   } catch {
     return null;
   }

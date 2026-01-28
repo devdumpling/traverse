@@ -3,6 +3,7 @@
  * Detects which framework built the application based on build output signatures.
  */
 
+import { readFile, access } from 'node:fs/promises';
 import type { Result } from '../types.ts';
 import type { FrameworkType } from '../types.ts';
 import { ok, err } from '../result.ts';
@@ -25,7 +26,7 @@ interface PackageJson {
 
 const fileExists = async (path: string): Promise<boolean> => {
   try {
-    await Bun.file(path).text();
+    await access(path);
     return true;
   } catch {
     return false;
@@ -34,7 +35,7 @@ const fileExists = async (path: string): Promise<boolean> => {
 
 const readJson = async <T>(path: string): Promise<T | null> => {
   try {
-    const content = await Bun.file(path).text();
+    const content = await readFile(path, 'utf-8');
     return JSON.parse(content) as T;
   } catch {
     return null;
@@ -56,7 +57,7 @@ const detectNextJs = async (
 ): Promise<DetectionResult | null> => {
   // Check for .next directory (production build)
   const nextDirExists = await fileExists(`${sourceDir}/.next/BUILD_ID`);
-  
+
   // Check for next in package.json
   const pkg = await readJson<PackageJson>(`${sourceDir}/package.json`);
   const hasNext = pkg && (
@@ -80,7 +81,7 @@ const detectReactRouter = async (
 ): Promise<DetectionResult | null> => {
   // Check for build directory (React Router framework mode)
   const buildExists = await fileExists(`${sourceDir}/build/server/index.js`);
-  
+
   // Check for react-router in package.json
   const pkg = await readJson<PackageJson>(`${sourceDir}/package.json`);
   const hasReactRouter = pkg && (
@@ -106,7 +107,7 @@ const detectGenericSpa = async (
   // Check for common SPA build directories
   const distExists = await fileExists(`${sourceDir}/dist/index.html`);
   const buildExists = await fileExists(`${sourceDir}/build/index.html`);
-  
+
   // Check for React in package.json (but not Next.js or React Router)
   const pkg = await readJson<PackageJson>(`${sourceDir}/package.json`);
   const hasReact = pkg && (
@@ -116,8 +117,8 @@ const detectGenericSpa = async (
 
   if (!distExists && !buildExists && !hasReact) return null;
 
-  const buildDir = distExists ? `${sourceDir}/dist` 
-    : buildExists ? `${sourceDir}/build` 
+  const buildDir = distExists ? `${sourceDir}/dist`
+    : buildExists ? `${sourceDir}/build`
     : null;
 
   return {

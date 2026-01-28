@@ -2,6 +2,7 @@
  * Journey command implementation.
  */
 
+import { writeFile } from 'node:fs/promises';
 import type { JourneyCommand, JourneyResult } from '../../types.ts';
 import { runJourney, loadJourney } from '../../journey/index.ts';
 import { getDeviceConfig } from '../../config/index.ts';
@@ -139,7 +140,7 @@ export const executeJourney = async (command: JourneyCommand): Promise<number> =
   const output = formatOutput(result.value, command.format);
 
   if (command.output) {
-    await Bun.write(command.output, output);
+    await writeFile(command.output, output);
     console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);

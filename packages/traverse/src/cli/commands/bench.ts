@@ -2,6 +2,7 @@
  * Bench command implementation.
  */
 
+import { writeFile } from 'node:fs/promises';
 import type { BenchCommand, RuntimeBenchmark, ResourceType } from '../../types.ts';
 import { runBenchmark } from '../../bench/index.ts';
 import { getDeviceConfig, getNetworkConfig } from '../../config/index.ts';
@@ -191,7 +192,7 @@ export const executeBench = async (command: BenchCommand): Promise<number> => {
   const output = formatOutput(result.value, command.format);
 
   if (command.output) {
-    await Bun.write(command.output, output);
+    await writeFile(command.output, output);
     console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);

@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * Traverse CLI entry point.
  */
@@ -60,7 +60,7 @@ const runCommand = async (command: Command): Promise<number> => {
 };
 
 const main = async (): Promise<void> => {
-  const result = parse(Bun.argv);
+  const result = parse(process.argv);
 
   const exitCode = await match(result, {
     ok: runCommand,

@@ -3,6 +3,7 @@
  * Measures cold build time for a project.
  */
 
+import { writeFile } from 'node:fs/promises';
 import type { BuildCommand } from '../../types.ts';
 import { measureColdBuild, formatBuildTime, type BuildMetrics } from '../../dx/index.ts';
 import { formatTable } from '../format.ts';
@@ -70,7 +71,7 @@ export const executeBuild = async (command: BuildCommand): Promise<number> => {
 
   const result = await measureColdBuild({
     projectDir,
-    buildCommand: command.buildCmd ?? undefined,
+    ...(command.buildCmd && { buildCommand: command.buildCmd }),
     clearCache: command.clearCache,
   });
 
@@ -88,7 +89,7 @@ export const executeBuild = async (command: BuildCommand): Promise<number> => {
   const output = formatOutput(result.value, command.format);
 
   if (command.output) {
-    await Bun.write(command.output, output);
+    await writeFile(command.output, output);
     console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);

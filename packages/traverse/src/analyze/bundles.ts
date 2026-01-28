@@ -3,7 +3,9 @@
  * Calculates raw, gzip, and brotli sizes for JavaScript and CSS bundles.
  */
 
-import { gzipSync } from 'bun';
+import { readFile } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
+import fg from 'fast-glob';
 import type { ByteSize, ChunkAnalysis, BundleAnalysis, Result, FrameworkType } from '../types.ts';
 import { ok, err } from '../result.ts';
 import { parseManifest, isVendorOrFramework, type ChunkClassification } from './manifests.ts';
@@ -84,15 +86,14 @@ const isVendorChunkHeuristic = (path: string, name: string): boolean => {
 
 const calculateByteSize = (content: Uint8Array): ByteSize => {
   const raw = content.length;
-  
+
   // gzip compression
   const gzipped = gzipSync(content, { level: 9 });
   const gzip = gzipped.length;
-  
-  // Brotli - Bun doesn't have native brotli, estimate as ~85% of gzip
-  // In production, you'd use a brotli library
+
+  // Brotli - estimate as ~85% of gzip
   const brotli = Math.round(gzip * 0.85);
-  
+
   return { raw, gzip, brotli };
 };
 
@@ -111,24 +112,16 @@ const findFiles = async (
   dir: string,
   extensions: readonly string[]
 ): Promise<string[]> => {
-  const results: string[] = [];
-  
-  const processDir = async (currentDir: string): Promise<void> => {
-    try {
-      const entries = await Array.fromAsync(
-        new Bun.Glob(`**/*{${extensions.join(',')}}`).scan({
-          cwd: currentDir,
-          absolute: true,
-        })
-      );
-      results.push(...entries);
-    } catch {
-      // Directory doesn't exist or can't be read
-    }
-  };
-
-  await processDir(dir);
-  return results;
+  try {
+    const pattern = `**/*{${extensions.join(',')}}`;
+    return await fg(pattern, {
+      cwd: dir,
+      absolute: true,
+    });
+  } catch {
+    // Directory doesn't exist or can't be read
+    return [];
+  }
 };
 
 /**
@@ -137,20 +130,20 @@ const findFiles = async (
  */
 const isClientBundle = (path: string, buildDir: string): boolean => {
   const relativePath = path.replace(buildDir + '/', '');
-  
+
   // Exclude source maps
   if (path.endsWith('.map')) return false;
-  
+
   // Next.js specific: only include static/ directory for client bundles
   if (buildDir.endsWith('.next')) {
     // Include: static/chunks/, static/css/, static/media/
     // Exclude: server/, cache/, build/
     return relativePath.startsWith('static/');
   }
-  
+
   // React Router: include client/ directory
   if (relativePath.startsWith('server/')) return false;
-  
+
   return true;
 };
 
@@ -163,22 +156,21 @@ const readBundleFiles = async (
   classification: ChunkClassification | null
 ): Promise<FileInfo[]> => {
   const files = await findFiles(buildDir, ['.js', '.mjs', '.css']);
-  
+
   const fileInfos: FileInfo[] = [];
-  
+
   for (const path of files) {
     // Skip non-client bundles
     if (!isClientBundle(path, buildDir)) continue;
-    
+
     try {
-      const file = Bun.file(path);
-      const content = new Uint8Array(await file.arrayBuffer());
+      const content = await readFile(path);
       const name = path.replace(buildDir + '/', '');
-      
+
       fileInfos.push({
         path,
         name,
-        content,
+        content: new Uint8Array(content),
         type: getFileType(path),
         isVendor: isVendorChunkWithManifest(path, name, classification),
       });
@@ -186,7 +178,7 @@ const readBundleFiles = async (
       // Skip files that can't be read
     }
   }
-  
+
   return fileInfos;
 };
 
@@ -206,13 +198,13 @@ export const analyzeBundles = async (
   const options = typeof buildDirOrOptions === 'string'
     ? { buildDir: buildDirOrOptions }
     : buildDirOrOptions;
-  
+
   const { buildDir, framework } = options;
 
   try {
     // Try to parse manifest for accurate chunk classification
     let classification: ChunkClassification | null = null;
-    
+
     if (framework) {
       const manifestResult = await parseManifest(buildDir, framework);
       if (manifestResult.ok) {
@@ -221,7 +213,7 @@ export const analyzeBundles = async (
     }
 
     const files = await readBundleFiles(buildDir, classification);
-    
+
     if (files.length === 0) {
       return err({
         code: 'NO_BUILD_DIR',
@@ -251,7 +243,7 @@ export const analyzeBundles = async (
     const cssSizes = cssFiles.map(f => calculateByteSize(f.content));
     const vendorSizes = vendorFiles.map(f => calculateByteSize(f.content));
     const nonVendorSizes = nonVendorFiles.map(f => calculateByteSize(f.content));
-    
+
     const javascript = sumByteSizes(jsSizes);
     const css = sumByteSizes(cssSizes);
     const vendor = sumByteSizes(vendorSizes);

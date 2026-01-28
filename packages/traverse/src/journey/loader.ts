@@ -2,6 +2,7 @@
  * Journey file loader and validator.
  */
 
+import { access } from 'node:fs/promises';
 import type { Result } from '../types.ts';
 import { ok, err } from '../result.ts';
 import type { JourneyDefinition } from './define.ts';
@@ -22,12 +23,21 @@ const isValidJourneyDefinition = (obj: unknown): obj is JourneyDefinition => {
   );
 };
 
+const fileExists = async (path: string): Promise<boolean> => {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const loadJourney = async (
   path: string
 ): Promise<Result<JourneyDefinition, LoadError>> => {
-  const file = Bun.file(path);
-  
-  if (!(await file.exists())) {
+  const exists = await fileExists(path);
+
+  if (!exists) {
     return err({
       code: 'FILE_NOT_FOUND',
       message: `Journey file not found: ${path}`,
@@ -63,7 +73,7 @@ export const validateJourney = async (
   path: string
 ): Promise<Result<{ valid: true; name: string; description: string }, LoadError>> => {
   const result = await loadJourney(path);
-  
+
   if (!result.ok) {
     return result;
   }

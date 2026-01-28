@@ -3,6 +3,7 @@
  * Parses package.json to extract dependency counts.
  */
 
+import { readFile, access } from 'node:fs/promises';
 import type { Result, DependencyCount } from '../types.ts';
 import { ok, err } from '../result.ts';
 
@@ -18,6 +19,15 @@ interface PackageJson {
   readonly peerDependencies?: Record<string, string>;
 }
 
+const fileExists = async (path: string): Promise<boolean> => {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Analyze dependencies from package.json.
  */
@@ -25,9 +35,8 @@ export const analyzeDependencies = async (
   sourceDir: string
 ): Promise<Result<DependencyCount, DependencyError>> => {
   const packageJsonPath = `${sourceDir}/package.json`;
-  const file = Bun.file(packageJsonPath);
-  
-  const exists = await file.exists();
+
+  const exists = await fileExists(packageJsonPath);
   if (!exists) {
     return err({
       code: 'NO_PACKAGE_JSON',
@@ -36,7 +45,7 @@ export const analyzeDependencies = async (
   }
 
   try {
-    const content = await file.text();
+    const content = await readFile(packageJsonPath, 'utf-8');
     const pkg = JSON.parse(content) as PackageJson;
 
     const deps = Object.keys(pkg.dependencies ?? {});

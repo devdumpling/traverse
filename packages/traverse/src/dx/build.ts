@@ -1,12 +1,15 @@
 /**
  * Build time measurement.
- * 
+ *
  * Measures cold build time by:
  * 1. Cleaning build caches
  * 2. Running the build command
  * 3. Measuring elapsed time
  */
 
+import { readFile, stat, rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import type { EventEmitter } from 'node:events';
 import type { Result } from '../types.ts';
 import { ok, err } from '../result.ts';
 
@@ -53,31 +56,26 @@ const detectBuildConfig = async (
   projectDir: string
 ): Promise<{ cacheDirs: readonly string[]; buildCommand: string }> => {
   const packageJsonPath = `${projectDir}/package.json`;
-  const file = Bun.file(packageJsonPath);
-  
-  if (!(await file.exists())) {
-    return { cacheDirs: CACHE_DIRS.generic, buildCommand: BUILD_COMMANDS.generic };
-  }
 
   try {
-    const content = await file.text();
+    const content = await readFile(packageJsonPath, 'utf-8');
     const pkg = JSON.parse(content);
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
 
     if ('next' in deps) {
-      return { cacheDirs: CACHE_DIRS.nextjs, buildCommand: BUILD_COMMANDS.nextjs };
+      return { cacheDirs: CACHE_DIRS['nextjs'] ?? [], buildCommand: BUILD_COMMANDS['nextjs'] ?? 'npm run build' };
     }
     if ('@react-router/dev' in deps || 'react-router' in deps) {
-      return { cacheDirs: CACHE_DIRS['react-router'], buildCommand: BUILD_COMMANDS['react-router'] };
+      return { cacheDirs: CACHE_DIRS['react-router'] ?? [], buildCommand: BUILD_COMMANDS['react-router'] ?? 'npm run build' };
     }
     if ('vite' in deps) {
-      return { cacheDirs: CACHE_DIRS.vite, buildCommand: BUILD_COMMANDS.vite };
+      return { cacheDirs: CACHE_DIRS['vite'] ?? [], buildCommand: BUILD_COMMANDS['vite'] ?? 'npm run build' };
     }
   } catch {
-    // Ignore parse errors
+    // Ignore errors
   }
 
-  return { cacheDirs: CACHE_DIRS.generic, buildCommand: BUILD_COMMANDS.generic };
+  return { cacheDirs: CACHE_DIRS['generic'] ?? [], buildCommand: BUILD_COMMANDS['generic'] ?? 'npm run build' };
 };
 
 /**
@@ -85,7 +83,6 @@ const detectBuildConfig = async (
  */
 const pathExists = async (path: string): Promise<boolean> => {
   try {
-    const { stat } = await import('fs/promises');
     await stat(path);
     return true;
   } catch {
@@ -104,13 +101,7 @@ const clearCaches = async (projectDir: string, cacheDirs: readonly string[]): Pr
     try {
       const exists = await pathExists(fullPath);
       if (exists) {
-        // Use rm -rf via shell since Bun doesn't have recursive delete
-        const proc = Bun.spawn(['rm', '-rf', fullPath], {
-          cwd: projectDir,
-          stdout: 'ignore',
-          stderr: 'ignore',
-        });
-        await proc.exited;
+        await rm(fullPath, { recursive: true, force: true });
         cleared = true;
       }
     } catch {
@@ -122,20 +113,57 @@ const clearCaches = async (projectDir: string, cacheDirs: readonly string[]): Pr
 };
 
 /**
+ * Run a command and return the result.
+ */
+const runCommand = (
+  cmd: string,
+  args: string[],
+  options: { cwd: string; timeout: number; env?: NodeJS.ProcessEnv }
+): Promise<{ exitCode: number; stderr: string }> => {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args, {
+      cwd: options.cwd,
+      env: options.env,
+      shell: true,
+    });
+
+    let stderr = '';
+    proc.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    const timeoutId = setTimeout(() => {
+      proc.kill();
+      reject(new Error('Command timed out'));
+    }, options.timeout);
+
+    (proc as unknown as EventEmitter).on('close', (code: number | null) => {
+      clearTimeout(timeoutId);
+      resolve({ exitCode: code ?? 1, stderr });
+    });
+
+    (proc as unknown as EventEmitter).on('error', (e: Error) => {
+      clearTimeout(timeoutId);
+      reject(e);
+    });
+  });
+};
+
+/**
  * Measure cold build time for a project.
  */
 export const measureColdBuild = async (
   options: BuildOptions
 ): Promise<Result<BuildMetrics, BuildError>> => {
   const { projectDir, timeout = 300000 } = options; // 5 minute default timeout
-  
+
   const config = await detectBuildConfig(projectDir);
   const buildCommand = options.buildCommand ?? config.buildCommand;
 
   // Clear caches if requested (default true)
   const shouldClearCache = options.clearCache !== false;
   let cacheCleared = false;
-  
+
   if (shouldClearCache) {
     cacheCleared = await clearCaches(projectDir, config.cacheDirs);
   }
@@ -156,42 +184,31 @@ export const measureColdBuild = async (
   const startTime = performance.now();
 
   try {
-    const proc = Bun.spawn([cmd, ...args], {
+    const result = await runCommand(cmd, args, {
       cwd: projectDir,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      timeout,
       env: {
         ...process.env,
-        // Ensure consistent environment
         CI: 'true',
         FORCE_COLOR: '0',
       },
     });
 
-    // Set up timeout
-    const timeoutId = setTimeout(() => {
-      proc.kill();
-    }, timeout);
-
-    const exitCode = await proc.exited;
-    clearTimeout(timeoutId);
-
     const endTime = performance.now();
     const coldBuildTime = endTime - startTime;
 
-    if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text();
+    if (result.exitCode !== 0) {
       return err({
         code: 'BUILD_FAILED',
-        message: `Build failed with exit code ${exitCode}: ${stderr.slice(0, 500)}`,
-        exitCode,
+        message: `Build failed with exit code ${result.exitCode}: ${result.stderr.slice(0, 500)}`,
+        exitCode: result.exitCode,
       });
     }
 
     return ok({
       coldBuildTime,
       command: buildCommand,
-      exitCode,
+      exitCode: result.exitCode,
       cacheCleared,
     });
   } catch (e) {

@@ -3,6 +3,7 @@
  * Static analysis of build outputs.
  */
 
+import { writeFile } from 'node:fs/promises';
 import type { AnalyzeCommand, StaticAnalysis, ArchitectureType, HydrationStrategy, DataStrategy } from '../../types.ts';
 import { analyze, formatByteSize } from '../../analyze/index.ts';
 import { formatTable } from '../format.ts';
@@ -98,12 +99,12 @@ ${bundleTable}
     // Runtime breakdown (if available)
     if (runtime) {
       const categories = [
-        { name: 'Framework Core', ...runtime.framework },
-        { name: 'Router', ...runtime.router },
-        { name: 'Hydration', ...runtime.hydration },
-        { name: 'Polyfills', ...runtime.polyfills },
-        { name: 'Application', ...runtime.application },
-        { name: 'Other/Vendor', ...runtime.other },
+        runtime.framework,
+        runtime.router,
+        runtime.hydration,
+        runtime.polyfills,
+        runtime.application,
+        runtime.other,
       ].filter(c => c.size.gzip > 0)
        .sort((a, b) => b.size.gzip - a.size.gzip);
 
@@ -272,7 +273,7 @@ ${nextTable}
   <h2>Chunks (${bundles.chunks.length})</h2>
   <table>
     <tr><th>Chunk</th><th class="size-cell">Raw</th><th class="size-cell">Gzip</th></tr>
-    ${bundles.chunks
+    ${[...bundles.chunks]
       .sort((a, b) => b.size.raw - a.size.raw)
       .slice(0, 20)
       .map(chunk => `
@@ -322,8 +323,8 @@ export const executeAnalyze = async (command: AnalyzeCommand): Promise<number> =
 
   const result = await analyze({
     sourceDir,
-    buildDir,
-    framework: command.framework ?? undefined,
+    ...(buildDir !== undefined && { buildDir }),
+    ...(command.framework && { framework: command.framework }),
   });
 
   if (!result.ok) {
@@ -334,7 +335,7 @@ export const executeAnalyze = async (command: AnalyzeCommand): Promise<number> =
   const output = formatOutput(result.value, command.format);
 
   if (command.output) {
-    await Bun.write(command.output, output);
+    await writeFile(command.output, output);
     console.error(`Results written to ${command.output}`);
   } else {
     console.log(output);

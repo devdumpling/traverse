@@ -218,8 +218,9 @@ export const parseViteManifest = async (
         
         // Extract route from source path
         const routeMatch = entry.src?.match(/routes\/(.+)\.(tsx?|jsx?)$/);
-        if (routeMatch) {
-          const routePath = '/' + routeMatch[1].replace(/\$/g, ':').replace(/index$/, '');
+        const matchedRoute = routeMatch?.[1];
+        if (matchedRoute) {
+          const routePath = '/' + matchedRoute.replace(/\$/g, ':').replace(/index$/, '');
           routeChunks.push({
             route: routePath || '/',
             chunks: [filePath, ...(entry.imports ?? []).map(i => manifest[i]?.file).filter(Boolean) as string[]],

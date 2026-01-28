@@ -142,9 +142,9 @@ export const analyze = async (
     dependencies,
     routes,
     frameworkSpecific,
-    architecture,
-    runtime,
-    routeCosts,
+    ...(architecture !== undefined && { architecture }),
+    ...(runtime !== undefined && { runtime }),
+    ...(routeCosts !== undefined && { routeCosts }),
   });
 };
 
