@@ -28,21 +28,19 @@ Traverse should definitively answer:
 
 ## Technical Stack
 
-| Technology | Purpose |
-|------------|---------|
-| **Bun** | Runtime, native TypeScript, CLI, testing |
-| **Playwright** | Browser automation, CDP access, tracing |
-| **TypeScript Compiler API** | AST analysis (Phase 3) |
+| Technology                  | Purpose                                  |
+| --------------------------- | ---------------------------------------- |
+| **Bun**                     | Runtime, native TypeScript, CLI, testing |
+| **Playwright**              | Browser automation, CDP access, tracing  |
+| **TypeScript Compiler API** | AST analysis (Phase 3)                   |
 
 ### Dependencies (Minimal)
 
-| Package | Version | Purpose |
-|---------|---------|---------|
+| Package      | Version | Purpose                        |
+| ------------ | ------- | ------------------------------ |
 | `playwright` | ^1.50.0 | Browser automation, CDP access |
-| `typescript` | ^5.7.0 | Type checking (dev) |
-| `@types/bun` | ^1.2.0 | Bun types (dev) |
-
-No CLI framework - hand-rolled with `Bun.argv`.
+| `typescript` | ^5.7.0  | Type checking (dev)            |
+| `@types/bun` | ^1.2.0  | Bun types (dev)                |
 
 ---
 
@@ -144,11 +142,13 @@ traverse/
 **Goal:** `traverse bench <url>` captures CWV + resources across N runs, outputs JSON.
 
 #### 1.1 Project Scaffolding
+
 - [x] `package.json` with Bun + Playwright deps
 - [x] `tsconfig.json` with strict settings
 - [x] Directory structure creation
 
 #### 1.2 Core Types (`src/types.ts`)
+
 - [x] `Result<T, E>` type and utilities
 - [x] `ByteSize` (raw, gzip, brotli)
 - [x] `AggregatedMetric` (median, p75, p95, etc.)
@@ -157,29 +157,34 @@ traverse/
 - [x] `CaptureState` discriminated union
 
 #### 1.3 CLI Framework (`src/cli/`)
+
 - [x] Argument parser with `Bun.argv`
 - [x] Command routing
 - [x] Help text generation
 - [x] `traverse bench` command skeleton
 
 #### 1.4 Config System (`src/config/`)
+
 - [x] `defineConfig` helper
 - [x] Config file loader
 - [x] Default device presets (desktop, mobile)
 - [x] Default network presets (4g, 3g)
 
 #### 1.5 Browser Integration (`src/browser/`)
+
 - [x] Playwright browser launch with options
 - [x] Page context creation with device emulation
 - [x] CDP session establishment
 - [x] Network throttling setup
 
 #### 1.6 Metric Capture (`src/capture/`)
+
 - [x] Core Web Vitals via CDP (LCP, FCP, CLS, TTFB)
 - [x] Resource timing capture
 - [x] Basic performance timeline
 
 #### 1.7 Benchmark Runner (`src/bench/`)
+
 - [x] Multi-run execution
 - [x] Statistical aggregation (median, percentiles)
 - [x] JSON output formatting
@@ -193,21 +198,25 @@ traverse/
 **Goal:** `traverse journey <file>` executes multi-step journeys with per-step metrics.
 
 #### 2.1 Journey Definition (`src/journey/`)
+
 - [x] `defineJourney` API
 - [x] Journey file loading and validation
 - [x] `traverse validate` command
 
 #### 2.2 Journey Runner
+
 - [x] Step execution with context
 - [x] `CaptureContext` implementation (cwv, resources, navigation, memory)
 - [x] Interaction bracketing (startInteraction/endInteraction)
 
 #### 2.3 Navigation Detection
+
 - [x] Navigation type classification (initial, hard, soft, none)
 - [ ] Prefetch status detection
 - [ ] Navigation trigger identification
 
 #### 2.4 Cumulative Metrics
+
 - [x] Total JS loaded tracking
 - [x] Cache hit rate calculation
 - [x] Memory high-water mark
@@ -222,23 +231,27 @@ traverse/
 **Goal:** `traverse analyze` inspects build outputs without running the app.
 
 #### 3.1 Framework Detection
+
 - [x] Auto-detect Next.js, React Router, generic SPA
 - [ ] SvelteKit detection
 - [ ] Version detection
 
 #### 3.2 Bundle Analysis
+
 - [x] Total bundle size (raw, gzip, brotli)
 - [x] Per-entry breakdown
 - [ ] Chunk analysis with module attribution
 - [ ] Duplicate dependency detection
 
 #### 3.3 Next.js Specifics
+
 - [x] `.next/` build manifest parsing
 - [x] App Router vs Pages Router detection
 - [ ] Server/Client Component boundary detection
 - [ ] RSC payload estimation
 
 #### 3.4 Route Analysis
+
 - [x] Route structure mapping (Next.js)
 - [ ] Dynamic segment detection
 - [ ] Route-to-bundle mapping
@@ -252,16 +265,19 @@ traverse/
 **Goal:** Compare captures and generate rich reports.
 
 #### 4.1 Comparison Engine
+
 - [ ] Baseline comparison (current vs stored)
 - [ ] A/B comparison (two captures)
 - [ ] Multi-way comparison (framework shootouts)
 
 #### 4.2 Report Formats
+
 - [ ] JSON (already exists from Phase 1)
 - [ ] Markdown tables for PR comments
 - [ ] HTML dashboard with visualizations
 
 #### 4.3 CI Integration
+
 - [ ] GitHub Actions annotations
 - [ ] Regression warnings
 - [ ] PR check summaries
@@ -275,15 +291,18 @@ traverse/
 **Goal:** Broaden framework support and add DX metrics.
 
 #### 5.1 Additional Frameworks
+
 - [ ] React Router analysis module
 - [ ] SvelteKit analysis module
 
 #### 5.2 DX Metrics
+
 - [ ] Dev server cold/warm start time
 - [ ] HMR round-trip measurement
 - [ ] Production build time
 
 #### 5.3 Trend Analysis
+
 - [ ] SQLite storage for historical data
 - [ ] Trend visualization
 - [ ] Regression detection over time
@@ -335,14 +354,14 @@ traverse validate     # Validate journey file
 
 ## Key Technical Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| CLI parsing | `Bun.argv` hand-rolled | Simple enough, zero deps |
-| Config format | `traverse.config.ts` | Type-safe, Bun runs TS natively |
-| Error handling | `Result<T, E>` types | Never throw for expected failures |
-| Testing | `bun test`, colocated | `foo.ts` paired with `foo.test.ts` |
-| File I/O | `Bun.file()` / `Bun.write()` | Native Bun APIs |
-| VCS | `jj` with git backend | Logical change management |
+| Decision       | Choice                       | Rationale                          |
+| -------------- | ---------------------------- | ---------------------------------- |
+| CLI parsing    | `Bun.argv` hand-rolled       | Simple enough, zero deps           |
+| Config format  | `traverse.config.ts`         | Type-safe, Bun runs TS natively    |
+| Error handling | `Result<T, E>` types         | Never throw for expected failures  |
+| Testing        | `bun test`, colocated        | `foo.ts` paired with `foo.test.ts` |
+| File I/O       | `Bun.file()` / `Bun.write()` | Native Bun APIs                    |
+| VCS            | `jj` with git backend        | Logical change management          |
 
 ---
 
@@ -355,4 +374,4 @@ traverse validate     # Validate journey file
 
 ---
 
-*Last updated: January 2026*
+_Last updated: January 2026_

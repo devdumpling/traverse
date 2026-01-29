@@ -11,12 +11,17 @@ It's designed for framework comparisons (Next.js vs React Router vs SvelteKit) a
 ## Installation
 
 ```bash
-# Clone and install
-git clone https://github.com/your-org/traverse
+# Run directly with npx
+npx @wellwright/traverse <command>
+
+# Or install globally
+npm install -g @wellwright/traverse
+traverse <command>
+
+# Or for development from source
+git clone https://github.com/devdumpling/traverse
 cd traverse
 bun install
-
-# Run from repo root
 bun run traverse <command>
 ```
 
@@ -221,10 +226,9 @@ traverse journey ./journeys/checkout.ts --base-url http://localhost:3000 --runs 
 
 **Journey Definition:**
 
-```typescript
-import { defineJourney } from "traverse";
-
-export default defineJourney({
+```javascript
+// checkout.journey.js - no imports needed!
+export default {
   name: "checkout-flow",
   description: "Complete purchase from homepage to confirmation",
 
@@ -252,6 +256,17 @@ export default defineJourney({
       await capture.cwv();
     });
   },
+};
+```
+
+For TypeScript with full type inference, install the package and use `defineJourney`:
+
+```typescript
+import { defineJourney } from "@wellwright/traverse";
+
+export default defineJourney({
+  name: "checkout-flow",
+  // ... full autocomplete for ctx, page, capture
 });
 ```
 
