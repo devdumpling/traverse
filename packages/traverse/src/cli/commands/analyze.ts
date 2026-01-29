@@ -135,13 +135,10 @@ ${jsTable}
 
     // Route costs (if available)
     if (routeCosts && routeCosts.routes.length > 0) {
-      const routeRows: string[][] = routeCosts.routes.slice(0, 10).map(route => {
+      const routeRows: string[][] = routeCosts.routes.map(route => {
         const name = route.route.length > 25 ? `${route.route.slice(0, 22)}...` : route.route;
         return [name, formatByteSize(route.total.gzip), formatByteSize(route.unique.gzip), formatByteSize(route.shared.gzip)];
       });
-      if (routeCosts.routes.length > 10) {
-        routeRows.push([`... and ${routeCosts.routes.length - 10} more`, '', '', '']);
-      }
       const routeCostTable = formatTable(['Route', 'Total', 'Unique', 'Shared'], routeRows);
       md += `## Route Costs
 
@@ -169,19 +166,34 @@ ${dependencies.topDependencies.length > 0 ? `**Key dependencies:** ${dependencie
 
 `;
 
-    // Sort chunks by size descending, show top 10
+    // Build chunk ID to category map from runtime breakdown
+    const chunkCategoryMap = new Map<string, string>();
+    if (runtime) {
+      const categories = [
+        runtime.framework,
+        runtime.router,
+        runtime.hydration,
+        runtime.polyfills,
+        runtime.application,
+        runtime.other,
+      ];
+      for (const cat of categories) {
+        for (const chunkId of cat.chunks) {
+          chunkCategoryMap.set(chunkId, cat.name);
+        }
+      }
+    }
+
+    // Sort chunks by size descending
     const sortedChunks = [...bundles.chunks]
-      .sort((a, b) => b.size.raw - a.size.raw)
-      .slice(0, 10);
-    
+      .sort((a, b) => b.size.raw - a.size.raw);
+
     const chunkRows: string[][] = sortedChunks.map(chunk => {
       const name = chunk.id.length > 40 ? `...${chunk.id.slice(-37)}` : chunk.id;
-      return [name, formatByteSize(chunk.size.raw), formatByteSize(chunk.size.gzip)];
+      const category = chunkCategoryMap.get(chunk.id) ?? '-';
+      return [name, category, formatByteSize(chunk.size.raw), formatByteSize(chunk.size.gzip)];
     });
-    if (bundles.chunks.length > 10) {
-      chunkRows.push([`... and ${bundles.chunks.length - 10} more`, '', '']);
-    }
-    const chunksTable = formatTable(['Chunk', 'Raw', 'Gzip'], chunkRows);
+    const chunksTable = formatTable(['Chunk', 'Category', 'Raw', 'Gzip'], chunkRows);
     md += `## Chunks (${bundles.chunks.length})
 
 ${chunksTable}
@@ -220,8 +232,26 @@ ${nextTable}
   }
 
   // HTML format
-  const { meta, bundles, routes, frameworkSpecific } = result;
-  
+  const { meta, bundles, routes, frameworkSpecific, runtime } = result;
+
+  // Build chunk ID to category map from runtime breakdown
+  const chunkCategoryMap = new Map<string, string>();
+  if (runtime) {
+    const categories = [
+      runtime.framework,
+      runtime.router,
+      runtime.hydration,
+      runtime.polyfills,
+      runtime.application,
+      runtime.other,
+    ];
+    for (const cat of categories) {
+      for (const chunkId of cat.chunks) {
+        chunkCategoryMap.set(chunkId, cat.name);
+      }
+    }
+  }
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -272,13 +302,13 @@ ${nextTable}
 
   <h2>Chunks (${bundles.chunks.length})</h2>
   <table>
-    <tr><th>Chunk</th><th class="size-cell">Raw</th><th class="size-cell">Gzip</th></tr>
+    <tr><th>Chunk</th><th>Category</th><th class="size-cell">Raw</th><th class="size-cell">Gzip</th></tr>
     ${[...bundles.chunks]
       .sort((a, b) => b.size.raw - a.size.raw)
-      .slice(0, 20)
       .map(chunk => `
     <tr>
       <td>${chunk.id}</td>
+      <td>${chunkCategoryMap.get(chunk.id) ?? '-'}</td>
       <td class="size-cell">${formatByteSize(chunk.size.raw)}</td>
       <td class="size-cell">${formatByteSize(chunk.size.gzip)}</td>
     </tr>`).join('')}

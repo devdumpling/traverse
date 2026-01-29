@@ -1,6 +1,6 @@
 {
   "name": "@wellwright/traverse",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Performance data capture and analysis toolkit for web applications",
   "type": "module",
   "license": "MIT",
