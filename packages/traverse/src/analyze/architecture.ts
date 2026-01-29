@@ -146,15 +146,22 @@ const detectNextJsArchitecture = async (
 
 /**
  * Detect architecture signals from React Router / Vite build.
+ *
+ * Handles two directory structures:
+ * 1. buildDir is full build dir: buildDir/client/, buildDir/server/
+ * 2. buildDir is client dir: buildDir/../server/ (sibling)
  */
 const detectReactRouterArchitecture = async (
   buildDir: string
 ): Promise<ArchitectureSignal[]> => {
   const signals: ArchitectureSignal[] = [];
+  const { dirname, join } = await import('path');
 
   // Check for client entry (indicates SPA/transitional)
+  // Handle both: buildDir/client/assets OR buildDir/assets (if buildDir IS client)
   const hasClientEntry = await fileExists(`${buildDir}/client/assets`) ||
-    await fileExists(`${buildDir}/client`);
+    await fileExists(`${buildDir}/client`) ||
+    await fileExists(`${buildDir}/assets`);
   signals.push({
     indicator: 'Client entry bundle',
     detected: hasClientEntry,
@@ -163,7 +170,10 @@ const detectReactRouterArchitecture = async (
   });
 
   // Check for server entry
-  const hasServerEntry = await fileExists(`${buildDir}/server/index.js`);
+  // Handle both: buildDir/server/index.js OR buildDir/../server/index.js
+  const serverEntryInBuild = await fileExists(`${buildDir}/server/index.js`);
+  const serverEntrySibling = await fileExists(join(dirname(buildDir), 'server/index.js'));
+  const hasServerEntry = serverEntryInBuild || serverEntrySibling;
   signals.push({
     indicator: 'Server entry (SSR)',
     detected: hasServerEntry,
@@ -173,7 +183,11 @@ const detectReactRouterArchitecture = async (
 
   // Check for route modules (loaders pattern)
   // Look for .data endpoint patterns in client code
-  const clientDir = `${buildDir}/client/assets`;
+  // Handle both directory structures
+  const clientDir = await fileExists(`${buildDir}/client/assets`)
+    ? `${buildDir}/client/assets`
+    : `${buildDir}/assets`;
+
   try {
     const files = await fg('*.js', { cwd: clientDir, absolute: false });
 
@@ -226,14 +240,16 @@ const detectGenericArchitecture = async (
     }
   }
 
-  // Check for hydration
-  const hydrationPatterns = [
-    { name: 'React hydration', pattern: /hydrateRoot|hydrate\(/ },
-    { name: 'Vue hydration', pattern: /createSSRApp/ },
-    { name: 'Svelte hydration', pattern: /hydrate:true/ },
+  // Check for SSR indicators (actual server-side rendering evidence)
+  // Note: React bundles always include hydrateRoot even if not used,
+  // so we look for SSR-specific data patterns instead
+  const ssrIndicatorPatterns = [
+    { name: 'SSR data hydration', pattern: /__NEXT_DATA__|__REACT_ROUTER_DATA__|__remixContext|window\.__/ },
+    { name: 'Vue SSR', pattern: /createSSRApp|__VUE_SSR_CONTEXT__/ },
+    { name: 'Svelte SSR', pattern: /hydrate:true|__sveltekit/ },
   ];
 
-  for (const { name, pattern } of hydrationPatterns) {
+  for (const { name, pattern } of ssrIndicatorPatterns) {
     const detected = await chunkContains(buildDir, chunks, pattern);
     if (detected) {
       signals.push({
@@ -264,7 +280,8 @@ const detectGenericArchitecture = async (
  *
  * Modern frameworks:
  * - Next.js App Router: progressive (RSC + selective hydration)
- * - React Router 7: full (traditional hydration after SSR)
+ * - React Router 7 with SSR: full (traditional hydration after SSR)
+ * - Pure SPA (no SSR): none (no server HTML to hydrate)
  */
 const determineHydrationStrategy = (
   framework: FrameworkType,
@@ -273,18 +290,34 @@ const determineHydrationStrategy = (
   const hasIslands = signals.some(s => s.indicator.includes('Islands') && s.detected);
   if (hasIslands) return 'islands';
 
+  // Check if SSR indicators were detected (evidence of server-side rendering)
+  const hasSsrIndicators = signals.some(s =>
+    (s.indicator.includes('SSR') || s.indicator.includes('hydration')) && s.detected
+  );
+
+  // Check for server entry (indicates SSR is enabled)
+  const hasServerEntry = signals.some(s =>
+    s.indicator.includes('Server entry') && s.detected
+  );
+
   // Next.js with App Router = progressive hydration via RSC
   if (framework === 'nextjs') {
     const hasAppRouter = signals.some(s => s.indicator.includes('App Router') && s.detected);
     return hasAppRouter ? 'progressive' : 'full';
   }
 
-  // React Router 7 uses full hydration after SSR
+  // React Router 7: only has hydration if SSR is enabled
   if (framework === 'react-router') {
+    return hasServerEntry ? 'full' : 'none';
+  }
+
+  // Generic: check if SSR indicators exist in the code
+  if (hasSsrIndicators) {
     return 'full';
   }
 
-  return 'full';
+  // No hydration detected - pure client-side SPA
+  return 'none';
 };
 
 /**
@@ -292,12 +325,18 @@ const determineHydrationStrategy = (
  *
  * Modern frameworks:
  * - Next.js App Router: RSC (React Server Components)
- * - React Router 7: loaders (route-based data loading)
+ * - React Router 7 with SSR: loaders (route-based data loading)
+ * - Pure SPA: client-fetch (all data fetched on client)
  */
 const determineDataStrategy = (
   framework: FrameworkType,
   signals: readonly ArchitectureSignal[]
 ): DataStrategy => {
+  // Check for server entry (indicates SSR is enabled)
+  const hasServerEntry = signals.some(s =>
+    s.indicator.includes('Server entry') && s.detected
+  );
+
   if (framework === 'nextjs') {
     // Modern Next.js uses App Router with RSC
     const hasAppRouter = signals.some(s => s.indicator.includes('App Router') && s.detected);
@@ -305,7 +344,8 @@ const determineDataStrategy = (
   }
 
   if (framework === 'react-router') {
-    return 'loaders';
+    // Loaders only work with SSR; pure SPA uses client-fetch
+    return hasServerEntry ? 'loaders' : 'client-fetch';
   }
 
   return 'client-fetch';
